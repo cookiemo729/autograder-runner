@@ -2,22 +2,62 @@ title: Week 1 Exercise 3
 
 engine: playwright
 
+browser: chromium
+
+headless: false
+
 entry: wk1exercise3.html
 
-tests:
+actions:
+  - fill:
+      selector: "#num1"
+      value: "$num1"
+
+  - fill:
+      selector: "#num2"
+      value: "$num2"
+
+  - click:
+      selector: "button"
+
+testcases:
+
   - name: 2 + 3 = 5
     points: 10
 
-    actions:
-      - fill:
-          selector: "#num1"
-          value: "2"
+    inputs:
+      num1: "2"
+      num2: "3"
 
-      - fill:
-          selector: "#num2"
-          value: "3"
+    expect_console:
+      equals: "5"
 
-      - click:
-          selector: "button"
+  - name: 10 + 20 = 30
+    points: 10
 
-    expect_console: "5"
+    inputs:
+      num1: "10"
+      num2: "20"
+
+    expect_console:
+      equals: "30"
+
+  - name: -5 + 8 = 3
+    points: 10
+
+    inputs:
+      num1: "-5"
+      num2: "8"
+
+    expect_console:
+      equals: "3"
+
+  - name: Reject non-numeric input
+    points: 10
+
+    inputs:
+      num1: "abc"
+      num2: "5"
+
+    expect_console:
+      equals: "Please enter numbers only"
