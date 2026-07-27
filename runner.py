@@ -1,10 +1,28 @@
-from autograde.parser import load_assignment
-from autograde.engines.html_engine import HtmlEngine
+import argparse
 import json
+
+from autograde.parser import load_assignment
+from autograde.engine_factory import EngineFactory
 
 def main():
 
-    assignment = load_assignment("examples/week1/assignment.yml")
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("assignment")
+
+    parser.add_argument("submission")
+
+    parser.add_argument(
+        "--output",
+        default="grade.json",
+        help="Output JSON file"
+    )
+
+    args = parser.parse_args()
+
+    assignment = load_assignment(
+        f"{args.assignment}/assignment.yml"
+    )
 
     print("===================================")
     print(" AutoGrade Runner")
@@ -15,11 +33,13 @@ def main():
     print(f"Engine : {assignment['engine']}")
     print()
 
-    engine = HtmlEngine()
+    engine = EngineFactory.create(
+        assignment["engine"]
+    )
 
     result = engine.grade(
         assignment,
-        "submissions/student1"
+        args.submission
     )
 
     print("Results")
@@ -35,7 +55,7 @@ def main():
     print()
     print(f"Total: {result.score}/{result.max_score}")
 
-    with open("grade.json", "w", encoding="utf-8") as file:
+    with open(args.output, "w", encoding="utf-8") as file:
         json.dump(
             {
                 "score": result.score,
@@ -54,7 +74,7 @@ def main():
         )
 
     print()
-    print("grade.json generated.")
+    print(f"{args.output} generated.")
     
 if __name__ == "__main__":
     main()

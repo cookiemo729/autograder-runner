@@ -1,0 +1,23 @@
+title: Week 1 Exercise 3
+
+engine: playwright
+
+entry: wk1exercise3.html
+
+tests:
+  - name: 2 + 3 = 5
+    points: 10
+
+    actions:
+      - fill:
+          selector: "#num1"
+          value: "2"
+
+      - fill:
+          selector: "#num2"
+          value: "3"
+
+      - click:
+          selector: "button"
+
+    expect_console: "5"

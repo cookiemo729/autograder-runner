@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from pathlib import Path
 
 from autograde.models import TestResult, GradeResult
 
@@ -7,8 +8,8 @@ class HtmlEngine:
 
     def grade(self, assignment, submission_folder):
 
-        html_file = f"{submission_folder}/index.html"
-
+        html_file = Path(submission_folder) / assignment["entry"]
+        
         with open(html_file, "r", encoding="utf-8") as file:
             soup = BeautifulSoup(file, "lxml")
 

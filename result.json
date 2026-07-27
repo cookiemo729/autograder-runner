@@ -1,0 +1,31 @@
+{
+    "score": 50,
+    "max_score": 50,
+    "tests": [
+        {
+            "name": "Title exists",
+            "passed": true,
+            "points": 10
+        },
+        {
+            "name": "Form exists",
+            "passed": true,
+            "points": 10
+        },
+        {
+            "name": "Submit button exists",
+            "passed": true,
+            "points": 10
+        },
+        {
+            "name": "H1 exists",
+            "passed": true,
+            "points": 10
+        },
+        {
+            "name": "Sunday selected",
+            "passed": true,
+            "points": 10
+        }
+    ]
+}

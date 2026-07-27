@@ -1,0 +1,38 @@
+title: Week 1 Exercise 1
+
+engine: html
+
+entry: index.html
+
+tests:
+
+  - name: Title exists
+    points: 10
+    action:
+      exists:
+        selector: title
+
+  - name: Form exists
+    points: 10
+    action:
+      exists:
+        selector: form
+
+  - name: Submit button exists
+    points: 10
+    action:
+      exists:
+        selector: 'button[type="submit"]'
+
+  - name: H1 exists
+    points: 10
+    action:
+      exists:
+        selector: h1
+
+  - name: Sunday selected
+    points: 10
+    action:
+      attribute:
+        selector: option[value="Sunday"]
+        name: selected
