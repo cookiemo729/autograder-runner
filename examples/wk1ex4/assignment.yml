@@ -1,36 +1,55 @@
-title: Week 1 Exercise
+title: Week 1 Exercise 4
 
-engine: html
+engine: playwright
 
-tests:
+browser: chromium
 
-  - name: Title exists
+headless: false
+
+entry: wk1exercise4_alt.html
+
+testcases:
+
+  - name: GET Post
     points: 10
-    action:
-      exists:
-        selector: title
 
-  - name: Form exists
-    points: 10
-    action:
-      exists:
-        selector: form
+    inputs: {}
 
-  - name: Submit button exists
-    points: 10
-    action:
-      exists:
-        selector: 'button[type="submit"]'
+    actions:
+      - fill:
+          selector: "#postID"
+          value: "1"
 
-  - name: H1 exists
-    points: 10
-    action:
-      exists:
-        selector: h1
+      - click:
+          selector: "text=GET Post"
 
-  - name: Sunday selected
+      - wait:
+          milliseconds: 1000
+
+    expect_request:
+      method: "GET"
+      url_contains: "/posts/1"
+
+  - name: POST Post
     points: 10
-    action:
-      attribute:
-        selector: option[value="Sunday"]
-        name: selected
+
+    inputs: {}
+
+    actions:
+      - fill:
+          selector: "#title"
+          value: "Hello"
+
+      - fill:
+          selector: "#body"
+          value: "World"
+
+      - click:
+          selector: "text=POST Data"
+
+      - wait:
+          milliseconds: 1000
+
+    expect_request:
+      method: "POST"
+      url_contains: "/posts"
