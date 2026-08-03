@@ -4,6 +4,31 @@ import json
 from autograde.parser import load_assignment
 from autograde.engine_factory import EngineFactory
 
+
+def grade_assignment(assignment_path, submission_path):
+    """
+    Load an assignment and grade a submission.
+
+    Returns:
+        GradeResult
+    """
+
+    assignment = load_assignment(
+        f"{assignment_path}/assignment.yml"
+    )
+
+    engine = EngineFactory.create(
+        assignment["engine"]
+    )
+
+    result = engine.grade(
+        assignment,
+        submission_path
+    )
+
+    return assignment, result
+
+
 def main():
 
     parser = argparse.ArgumentParser()
@@ -20,8 +45,9 @@ def main():
 
     args = parser.parse_args()
 
-    assignment = load_assignment(
-        f"{args.assignment}/assignment.yml"
+    assignment, result = grade_assignment(
+        args.assignment,
+        args.submission
     )
 
     print("===================================")
@@ -32,15 +58,6 @@ def main():
     print(f"Title  : {assignment['title']}")
     print(f"Engine : {assignment['engine']}")
     print()
-
-    engine = EngineFactory.create(
-        assignment["engine"]
-    )
-
-    result = engine.grade(
-        assignment,
-        args.submission
-    )
 
     print("Results")
     print("-------")
@@ -75,6 +92,7 @@ def main():
 
     print()
     print(f"{args.output} generated.")
-    
+
+
 if __name__ == "__main__":
     main()
