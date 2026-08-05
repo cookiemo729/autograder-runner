@@ -1,8 +1,12 @@
+import hashlib
 import hmac
+import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
@@ -13,6 +17,7 @@ from runner import grade_assignment
 app = Flask(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+DATABASE_PATH = PROJECT_ROOT / "autograder.db"
 
 ASSIGNMENTS = {
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
@@ -25,9 +30,291 @@ ALLOWED_REPOSITORIES = {
 AUTOGRADER_API_KEY = os.environ.get("AUTOGRADER_API_KEY")
 
 
+def get_database():
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def initialize_database():
+    with get_database() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repository TEXT NOT NULL,
+                assignment TEXT NOT NULL,
+                commit_sha TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                max_score INTEGER NOT NULL,
+                passed INTEGER NOT NULL,
+                tests_json TEXT NOT NULL,
+                submitted_at TEXT NOT NULL,
+                UNIQUE(repository, assignment, commit_sha)
+            )
+            """
+        )
+
+
+def save_result(
+    repository,
+    assignment,
+    commit_sha,
+    score,
+    max_score,
+    passed,
+    tests,
+):
+    submitted_at = datetime.now(timezone.utc).isoformat()
+
+    with get_database() as connection:
+        connection.execute(
+            """
+            INSERT INTO submissions (
+                repository,
+                assignment,
+                commit_sha,
+                score,
+                max_score,
+                passed,
+                tests_json,
+                submitted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(repository, assignment, commit_sha)
+            DO UPDATE SET
+                score = excluded.score,
+                max_score = excluded.max_score,
+                passed = excluded.passed,
+                tests_json = excluded.tests_json,
+                submitted_at = excluded.submitted_at
+            """,
+            (
+                repository,
+                assignment,
+                commit_sha,
+                score,
+                max_score,
+                int(passed),
+                json.dumps(tests),
+                submitted_at,
+            ),
+        )
+
+
+def get_latest_submissions():
+    with get_database() as connection:
+        return connection.execute(
+            """
+            SELECT
+                repository,
+                assignment,
+                commit_sha,
+                score,
+                max_score,
+                passed,
+                submitted_at
+            FROM submissions
+            ORDER BY submitted_at DESC
+            LIMIT 100
+            """
+        ).fetchall()
+
+
 @app.get("/")
 def home():
-    return "AutoGrade API"
+    submissions = get_latest_submissions()
+
+    rows = []
+
+    for submission in submissions:
+        passed = bool(submission["passed"])
+        status_text = "Passed" if passed else "Failed"
+        status_class = "passed" if passed else "failed"
+
+        rows.append(
+            f"""
+            <tr>
+                <td>{submission["repository"]}</td>
+                <td>{submission["assignment"]}</td>
+                <td>
+                    <strong>
+                        {submission["score"]}/{submission["max_score"]}
+                    </strong>
+                </td>
+                <td>
+                    <span class="status {status_class}">
+                        {status_text}
+                    </span>
+                </td>
+                <td>
+                    <code>{submission["commit_sha"][:7]}</code>
+                </td>
+                <td>{submission["submitted_at"]}</td>
+            </tr>
+            """
+        )
+
+    if rows:
+        table_body = "\n".join(rows)
+    else:
+        table_body = """
+        <tr>
+            <td colspan="6" class="empty">
+                No submissions have been recorded yet.
+            </td>
+        </tr>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AutoGrade Dashboard</title>
+
+    <style>
+        * {{
+            box-sizing: border-box;
+        }}
+
+        body {{
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }}
+
+        .container {{
+            max-width: 1200px;
+            margin: auto;
+        }}
+
+        h1 {{
+            margin-bottom: 5px;
+        }}
+
+        .subtitle {{
+            color: #6b7280;
+            margin-bottom: 30px;
+        }}
+
+        .card {{
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }}
+
+        .card-header {{
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+
+        th,
+        td {{
+            padding: 15px 18px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+
+        th {{
+            background: #f9fafb;
+            color: #4b5563;
+        }}
+
+        tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        .status {{
+            display: inline-block;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 0.88rem;
+            font-weight: bold;
+        }}
+
+        .passed {{
+            background: #dcfce7;
+            color: #166534;
+        }}
+
+        .failed {{
+            background: #fee2e2;
+            color: #991b1b;
+        }}
+
+        .empty {{
+            text-align: center;
+            color: #6b7280;
+            padding: 40px;
+        }}
+
+        code {{
+            background: #f3f4f6;
+            padding: 3px 6px;
+            border-radius: 5px;
+        }}
+
+        @media (max-width: 850px) {{
+            .card {{
+                overflow-x: auto;
+            }}
+
+            table {{
+                min-width: 900px;
+            }}
+        }}
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>AutoGrade</h1>
+
+        <div class="subtitle">
+            Instructor submission dashboard
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <strong>Latest submissions</strong>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repository</th>
+                        <th>Assignment</th>
+                        <th>Score</th>
+                        <th>Status</th>
+                        <th>Commit</th>
+                        <th>Graded at (UTC)</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {table_body}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
+"""
 
 
 @app.get("/health")
@@ -44,7 +331,10 @@ def grade():
             "error": "Server API key is not configured"
         }), 500
 
-    if not hmac.compare_digest(supplied_key, AUTOGRADER_API_KEY):
+    if not hmac.compare_digest(
+        supplied_key,
+        AUTOGRADER_API_KEY,
+    ):
         return jsonify({
             "error": "Unauthorized"
         }), 401
@@ -129,6 +419,30 @@ def grade():
             str(submission_folder),
         )
 
+        tests = [
+            {
+                "name": test.name,
+                "passed": test.passed,
+                "points": test.points,
+                "awarded": (
+                    test.points if test.passed else 0
+                ),
+            }
+            for test in result.tests
+        ]
+
+        passed = result.score == result.max_score
+
+        save_result(
+            repository=repository_name,
+            assignment=assignment_key,
+            commit_sha=commit_sha,
+            score=result.score,
+            max_score=result.max_score,
+            passed=passed,
+            tests=tests,
+        )
+
         return jsonify({
             "assignment": assignment_key,
             "title": assignment["title"],
@@ -136,18 +450,8 @@ def grade():
             "commit_sha": commit_sha,
             "score": result.score,
             "max_score": result.max_score,
-            "passed": result.score == result.max_score,
-            "tests": [
-                {
-                    "name": test.name,
-                    "passed": test.passed,
-                    "points": test.points,
-                    "awarded": (
-                        test.points if test.passed else 0
-                    ),
-                }
-                for test in result.tests
-            ],
+            "passed": passed,
+            "tests": tests,
         }), 200
 
     except subprocess.TimeoutExpired:
@@ -171,6 +475,8 @@ def grade():
 
 
 if __name__ == "__main__":
+    initialize_database()
+
     app.run(
         host="127.0.0.1",
         port=8000,
