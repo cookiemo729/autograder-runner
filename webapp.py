@@ -142,6 +142,23 @@ def initialize_database():
             ),
         )
 
+        columns = connection.execute(
+            "PRAGMA table_info(submissions)"
+        ).fetchall()
+
+        column_names = {
+            column[1]
+            for column in columns
+        }
+
+        if "course_id" not in column_names:
+            connection.execute(
+                """
+                ALTER TABLE submissions
+                ADD COLUMN course_id INTEGER
+                """
+            )
+
 
 def save_result(
     repository,
@@ -820,7 +837,8 @@ def admin():
                                     ) }}"
                                     onsubmit="
                                         return confirm(
-                                            'Delete this course? This cannot be undone.'
+                                            'Delete this course, its enrolments, and '
+                                            + 'its submission records? This cannot be undone.'
                                         );
                                     "
                                 >
@@ -921,21 +939,60 @@ def admin_delete_course(course_id):
 
     with get_database() as connection:
 
-        enrolment_count = connection.execute(
+        course = connection.execute(
             """
-            SELECT COUNT(*)
-            FROM enrolments
+            SELECT id, code, title
+            FROM courses
+            WHERE id = ?
+            """,
+            (course_id,),
+        ).fetchone()
+
+        if course is None:
+            return "Course not found.", 404
+
+        latest_submission = connection.execute(
+            """
+            SELECT MAX(submitted_at)
+            FROM submissions
             WHERE course_id = ?
             """,
             (course_id,),
         ).fetchone()[0]
 
-        if enrolment_count > 0:
-            return (
-                "This course cannot be deleted because students "
-                "are already enrolled.",
-                409,
+        if latest_submission:
+
+            latest_time = datetime.fromisoformat(
+                latest_submission
             )
+
+            cutoff_time = datetime.now(
+                timezone.utc
+            ) - timedelta(days=365 * 3)
+
+            if latest_time > cutoff_time:
+                return (
+                    "This course cannot be deleted because "
+                    "its latest submission was less than "
+                    "three years ago.",
+                    409,
+                )
+
+        connection.execute(
+            """
+            DELETE FROM enrolments
+            WHERE course_id = ?
+            """,
+            (course_id,),
+        )
+
+        connection.execute(
+            """
+            DELETE FROM submissions
+            WHERE course_id = ?
+            """,
+            (course_id,),
+        )
 
         connection.execute(
             """
