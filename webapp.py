@@ -41,6 +41,10 @@ ASSIGNMENTS = {
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
 }
 
+ASSIGNMENT_COURSES = {
+    "wk1ex4": "IS216-AY2627-T1",
+}
+
 ALLOWED_REPOSITORIES = {
     "cookiemo729/wk1ex4-student-template",
 }
@@ -163,6 +167,7 @@ def initialize_database():
 def save_result(
     repository,
     assignment,
+    course_id,
     commit_sha,
     score,
     max_score,
@@ -177,6 +182,7 @@ def save_result(
             INSERT INTO submissions (
                 repository,
                 assignment,
+                course_id,
                 commit_sha,
                 score,
                 max_score,
@@ -184,7 +190,7 @@ def save_result(
                 tests_json,
                 submitted_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(repository, assignment, commit_sha)
             DO UPDATE SET
                 score = excluded.score,
@@ -196,6 +202,7 @@ def save_result(
             (
                 repository,
                 assignment,
+                course_id,
                 commit_sha,
                 score,
                 max_score,
@@ -1054,6 +1061,32 @@ def grade():
 
     assignment_path = ASSIGNMENTS.get(assignment_key)
 
+    course_join_code = ASSIGNMENT_COURSES.get(
+        assignment_key
+    )
+
+    if not course_join_code:
+        return jsonify({
+            "error": "Assignment is not linked to a course"
+        }), 500
+
+    with get_database() as connection:
+        course = connection.execute(
+            """
+            SELECT id
+            FROM courses
+            WHERE join_code = ?
+            """,
+            (course_join_code,),
+        ).fetchone()
+
+    if course is None:
+        return jsonify({
+            "error": "Course not found"
+        }), 500
+
+    course_id = course["id"]
+
     if assignment_path is None:
         return jsonify({"error": "Unknown assignment"}), 400
 
@@ -1134,6 +1167,7 @@ def grade():
         save_result(
             repository=repository_name,
             assignment=assignment_key,
+            course_id=course_id,
             commit_sha=commit_sha,
             score=result.score,
             max_score=result.max_score,
