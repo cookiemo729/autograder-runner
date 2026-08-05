@@ -320,29 +320,29 @@ def home():
             background: #fee2e2;
             color: #991b1b;
         }}
-        .score-badge {
+        .score-badge {{
             display: inline-flex;
             align-items: center;
             gap: 7px;
             padding: 5px 11px;
             border-radius: 999px;
             font-weight: bold;
-        }
+        }}
 
-        .score-full {
+        .score-full {{
             background: #dcfce7;
             color: #166534;
-        }
+        }}
 
-        .score-partial {
+        .score-partial {{
             background: #fef3c7;
             color: #92400e;
-        }
+        }}
 
-        .score-zero {
+        .score-zero {{
             background: #fee2e2;
             color: #991b1b;
-        }
+        }}
         .empty {{
             text-align: center;
             color: #6b7280;
