@@ -10,12 +10,29 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, request
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template_string,
+    request,
+    session,
+    url_for,
+)
 
 from runner import grade_assignment
 
 
 app = Flask(__name__)
+
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY",
+    "development-secret-change-this",
+)
+
+AUTOGRADER_ADMIN_PASSWORD = os.environ.get(
+    "AUTOGRADER_ADMIN_PASSWORD"
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATABASE_PATH = PROJECT_ROOT / "autograder.db"
@@ -38,7 +55,53 @@ def get_database():
 
 
 def initialize_database():
+
     with get_database() as connection:
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                github_username TEXT NOT NULL UNIQUE,
+                email TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS courses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL,
+                title TEXT NOT NULL,
+                join_code TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS enrolments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                course_id INTEGER NOT NULL,
+                enrolled_at TEXT NOT NULL,
+
+                UNIQUE(user_id, course_id),
+
+                FOREIGN KEY(user_id)
+                    REFERENCES users(id),
+
+                FOREIGN KEY(course_id)
+                    REFERENCES courses(id)
+            )
+            """
+        )
+
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS submissions (
@@ -51,9 +114,32 @@ def initialize_database():
                 passed INTEGER NOT NULL,
                 tests_json TEXT NOT NULL,
                 submitted_at TEXT NOT NULL,
-                UNIQUE(repository, assignment, commit_sha)
+
+                UNIQUE(
+                    repository,
+                    assignment,
+                    commit_sha
+                )
             )
             """
+        )
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO courses (
+                code,
+                title,
+                join_code,
+                created_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "IS216",
+                "Web Application Development 2",
+                "IS216-AY2627-T1",
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
 
 
@@ -145,6 +231,25 @@ def format_submission_time(utc_string):
     return sg_time.strftime(
         "%d %b %Y %I:%M %p"
     )
+
+def admin_is_logged_in():
+    return session.get("admin_logged_in") is True
+
+
+def get_courses():
+    with get_database() as connection:
+        return connection.execute(
+            """
+            SELECT
+                id,
+                code,
+                title,
+                join_code,
+                created_at
+            FROM courses
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
 
 @app.get("/")
 def home():
@@ -402,6 +507,390 @@ def home():
 </html>
 """
 
+@app.route("/admin", methods=["GET", "POST"])
+def admin():
+
+    error = None
+
+    if request.method == "POST":
+
+        password = request.form.get("password", "")
+
+        if (
+            AUTOGRADER_ADMIN_PASSWORD
+            and hmac.compare_digest(
+                password,
+                AUTOGRADER_ADMIN_PASSWORD,
+            )
+        ):
+            session["admin_logged_in"] = True
+
+            return redirect(
+                url_for("admin")
+            )
+
+        error = "Incorrect password."
+
+    if not admin_is_logged_in():
+
+        return render_template_string(
+            """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AutoGrade Admin</title>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .card {
+            max-width: 420px;
+            margin: 80px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        input {
+            width: 100%;
+            padding: 11px;
+            margin: 8px 0 16px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 11px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .error {
+            color: #991b1b;
+            background: #fee2e2;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>AutoGrade Admin</h1>
+
+        {% if error %}
+            <div class="error">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <form method="post">
+            <label for="password">
+                Admin password
+            </label>
+
+            <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autofocus
+            >
+
+            <button type="submit">
+                Sign in
+            </button>
+        </form>
+    </div>
+</body>
+</html>
+            """,
+            error=error,
+        )
+
+    courses = get_courses()
+
+    return render_template_string(
+        """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AutoGrade Admin</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 950px;
+            margin: auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0 14px;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f9fafb;
+        }
+
+        a {
+            color: #2563eb;
+        }
+
+        code {
+            background: #f3f4f6;
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="topbar">
+            <div>
+                <h1>AutoGrade Admin</h1>
+                <p>Create and manage courses.</p>
+            </div>
+
+            <a href="{{ url_for('admin_logout') }}">
+                Sign out
+            </a>
+        </div>
+
+        <div class="card">
+            <h2>Create course</h2>
+
+            <form
+                method="post"
+                action="{{ url_for('admin_create_course') }}"
+            >
+                <label for="code">
+                    Course code
+                </label>
+
+                <input
+                    id="code"
+                    name="code"
+                    placeholder="IS216"
+                    required
+                >
+
+                <label for="title">
+                    Course title
+                </label>
+
+                <input
+                    id="title"
+                    name="title"
+                    placeholder="Web Application Development 2"
+                    required
+                >
+
+                <label for="join_code">
+                    Join code
+                </label>
+
+                <input
+                    id="join_code"
+                    name="join_code"
+                    placeholder="IS216-AY2627-T1"
+                    required
+                >
+
+                <button type="submit">
+                    Create course
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Courses</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Title</th>
+                        <th>Join link</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for course in courses %}
+                        <tr>
+                            <td>{{ course["code"] }}</td>
+
+                            <td>{{ course["title"] }}</td>
+
+                            <td>
+                                <code>
+                                    /join/{{ course["join_code"] }}
+                                </code>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="3">
+                                No courses created.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</body>
+</html>
+        """,
+        courses=courses,
+    )
+
+
+@app.post("/admin/courses")
+def admin_create_course():
+
+    if not admin_is_logged_in():
+        return redirect(
+            url_for("admin")
+        )
+
+    code = request.form.get(
+        "code",
+        "",
+    ).strip()
+
+    title = request.form.get(
+        "title",
+        "",
+    ).strip()
+
+    join_code = request.form.get(
+        "join_code",
+        "",
+    ).strip()
+
+    if not code or not title or not join_code:
+        return "All course fields are required.", 400
+
+    try:
+        with get_database() as connection:
+            connection.execute(
+                """
+                INSERT INTO courses (
+                    code,
+                    title,
+                    join_code,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    code,
+                    title,
+                    join_code,
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat(),
+                ),
+            )
+
+    except sqlite3.IntegrityError:
+        return (
+            "A course with that join code already exists.",
+            409,
+        )
+
+    return redirect(
+        url_for("admin")
+    )
+
+
+@app.get("/admin/logout")
+def admin_logout():
+
+    session.clear()
+
+    return redirect(
+        url_for("admin")
+    )
 
 @app.get("/health")
 def health():
