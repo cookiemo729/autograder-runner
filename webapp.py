@@ -6,8 +6,9 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request
 
@@ -121,6 +122,30 @@ def get_latest_submissions():
         ).fetchall()
 
 
+def format_submission_time(utc_string):
+
+    utc_time = datetime.fromisoformat(utc_string)
+
+    sg_time = utc_time.astimezone(
+        ZoneInfo("Asia/Singapore")
+    )
+
+    now = datetime.now(
+        ZoneInfo("Asia/Singapore")
+    )
+
+    if sg_time.date() == now.date():
+        return "Today " + sg_time.strftime("%I:%M %p")
+
+    if sg_time.date() == (
+        now.date() - timedelta(days=1)
+    ):
+        return "Yesterday " + sg_time.strftime("%I:%M %p")
+
+    return sg_time.strftime(
+        "%d %b %Y %I:%M %p"
+    )
+
 @app.get("/")
 def home():
     submissions = get_latest_submissions()
@@ -128,29 +153,68 @@ def home():
     rows = []
 
     for submission in submissions:
+
+        passed = bool(submission["passed"])
+
+        status_text = "Passed" if passed else "Failed"
+        status_class = "passed" if passed else "failed"
+
+        student = submission["repository"].split("/")[0]
+
+        display_time = format_submission_time(
+            submission["submitted_at"]
+        )
+
+        score_ratio = (
+            submission["score"]
+            / submission["max_score"]
+            if submission["max_score"] > 0
+            else 0
+        )
+
+        if score_ratio == 1:
+            score_class = "score-full"
+            score_icon = "●"
+        elif score_ratio > 0:
+            score_class = "score-partial"
+            score_icon = "●"
+        else:
+            score_class = "score-zero"
+            score_icon = "●"
+
+        display_time = format_submission_time(
+            submission["submitted_at"]
+        )
         passed = bool(submission["passed"])
         status_text = "Passed" if passed else "Failed"
         status_class = "passed" if passed else "failed"
+        student = submission["repository"].split("/")[0]
 
         rows.append(
             f"""
             <tr>
-                <td>{submission["repository"]}</td>
+                <td>{student}</td>
+
                 <td>{submission["assignment"]}</td>
+
                 <td>
-                    <strong>
+                    <span class="score-badge {score_class}">
+                        {score_icon}
                         {submission["score"]}/{submission["max_score"]}
-                    </strong>
+                    </span>
                 </td>
+
                 <td>
                     <span class="status {status_class}">
                         {status_text}
                     </span>
                 </td>
+
                 <td>
                     <code>{submission["commit_sha"][:7]}</code>
                 </td>
-                <td>{submission["submitted_at"]}</td>
+
+                <td>{display_time}</td>
             </tr>
             """
         )
@@ -256,7 +320,29 @@ def home():
             background: #fee2e2;
             color: #991b1b;
         }}
+        .score-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-weight: bold;
+        }
 
+        .score-full {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .score-partial {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .score-zero {
+            background: #fee2e2;
+            color: #991b1b;
+        }
         .empty {{
             text-align: center;
             color: #6b7280;
@@ -297,12 +383,12 @@ def home():
             <table>
                 <thead>
                     <tr>
-                        <th>Repository</th>
+                        <th>Student</th>
                         <th>Assignment</th>
                         <th>Score</th>
                         <th>Status</th>
                         <th>Commit</th>
-                        <th>Graded at (UTC)</th>
+                        <th>Submitted</th>
                     </tr>
                 </thead>
 
