@@ -691,7 +691,13 @@ def admin():
             font-weight: bold;
             cursor: pointer;
         }
+        .delete-button {
+            background: #dc2626;
+        }
 
+        .delete-button:hover {
+            background: #b91c1c;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -789,6 +795,7 @@ def admin():
                         <th>Code</th>
                         <th>Title</th>
                         <th>Join link</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
 
@@ -804,10 +811,31 @@ def admin():
                                     /join/{{ course["join_code"] }}
                                 </code>
                             </td>
+                            <td>
+                                <form
+                                    method="post"
+                                    action="{{ url_for(
+                                        'admin_delete_course',
+                                        course_id=course['id']
+                                    ) }}"
+                                    onsubmit="
+                                        return confirm(
+                                            'Delete this course? This cannot be undone.'
+                                        );
+                                    "
+                                >
+                                    <button
+                                        type="submit"
+                                        class="delete-button"
+                                    >
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="3">
+                            <td colspan="4">
                                 No courses created.
                             </td>
                         </tr>
@@ -882,6 +910,44 @@ def admin_create_course():
         url_for("admin")
     )
 
+
+@app.post("/admin/courses/<int:course_id>/delete")
+def admin_delete_course(course_id):
+
+    if not admin_is_logged_in():
+        return redirect(
+            url_for("admin")
+        )
+
+    with get_database() as connection:
+
+        enrolment_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM enrolments
+            WHERE course_id = ?
+            """,
+            (course_id,),
+        ).fetchone()[0]
+
+        if enrolment_count > 0:
+            return (
+                "This course cannot be deleted because students "
+                "are already enrolled.",
+                409,
+            )
+
+        connection.execute(
+            """
+            DELETE FROM courses
+            WHERE id = ?
+            """,
+            (course_id,),
+        )
+
+    return redirect(
+        url_for("admin")
+    )
 
 @app.get("/admin/logout")
 def admin_logout():
