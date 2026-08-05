@@ -29,6 +29,24 @@ def grade_assignment(assignment_path, submission_path):
     return assignment, result
 
 
+def grade_assignment(assignment_folder, submission_folder):
+
+    assignment = load_assignment(
+        f"{assignment_folder}/assignment.yml"
+    )
+
+    engine = EngineFactory.create(
+        assignment["engine"]
+    )
+
+    result = engine.grade(
+        assignment,
+        submission_folder
+    )
+
+    return assignment, result
+    
+
 def main():
 
     parser = argparse.ArgumentParser()
