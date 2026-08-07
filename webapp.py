@@ -214,40 +214,39 @@ def save_result(
 
 
 def get_latest_submissions():
+
     with get_database() as connection:
+
         return connection.execute(
             """
             SELECT
-                submissions.repository,
-                submissions.assignment,
-                submissions.commit_sha,
-                submissions.score,
-                submissions.max_score,
-                submissions.passed,
-                submissions.submitted_at,
+                s.repository,
+                s.assignment,
+                s.commit_sha,
+                s.score,
+                s.max_score,
+                s.passed,
+                s.submitted_at,
+                s.course_id,
 
-                users.name AS student_name,
-                users.student_id,
-                users.email,
-                users.github_username
+                u.name AS student_name,
+                u.student_id,
+                u.email,
+                u.github_username
 
-            FROM submissions
+            FROM submissions AS s
 
-            LEFT JOIN users
-                ON LOWER(users.github_username)
-                =
-                LOWER(
-                    SUBSTR(
-                        submissions.repository,
-                        1,
-                        INSTR(
-                            submissions.repository,
-                            '/'
-                        ) - 1
-                    )
-                )
+            LEFT JOIN users AS u
+                ON LOWER(u.github_username) =
+                   LOWER(
+                       SUBSTR(
+                           s.repository,
+                           1,
+                           INSTR(s.repository, '/') - 1
+                       )
+                   )
 
-            ORDER BY submissions.submitted_at DESC
+            ORDER BY s.submitted_at DESC
             LIMIT 100
             """
         ).fetchall()
