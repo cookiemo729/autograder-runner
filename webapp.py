@@ -275,6 +275,428 @@ def get_courses():
             """
         ).fetchall()
 
+def get_course_by_join_code(join_code):
+
+    with get_database() as connection:
+        return connection.execute(
+            """
+            SELECT
+                id,
+                code,
+                title,
+                join_code
+            FROM courses
+            WHERE join_code = ?
+            """,
+            (join_code,),
+        ).fetchone()
+
+@app.route("/join/<join_code>", methods=["GET", "POST"])
+def join_course(join_code):
+
+    course = get_course_by_join_code(join_code)
+
+    if course is None:
+        return "Course enrolment link not found.", 404
+
+    error = None
+    success = False
+
+    if request.method == "POST":
+
+        name = request.form.get(
+            "name",
+            "",
+        ).strip()
+
+        student_id = request.form.get(
+            "student_id",
+            "",
+        ).strip()
+
+        email = request.form.get(
+            "email",
+            "",
+        ).strip().lower()
+
+        github_username = request.form.get(
+            "github_username",
+            "",
+        ).strip()
+
+        if github_username.startswith("@"):
+            github_username = github_username[1:]
+
+        github_username = github_username.lower()
+
+        if (
+            not name
+            or not student_id
+            or not email
+            or not github_username
+        ):
+            error = "All fields are required."
+
+        elif "@" not in email:
+            error = "Please enter a valid email address."
+
+        elif " " in github_username:
+            error = "GitHub usernames cannot contain spaces."
+
+        else:
+
+            try:
+
+                with get_database() as connection:
+
+                    existing_user = connection.execute(
+                        """
+                        SELECT
+                            id,
+                            student_id,
+                            name,
+                            email,
+                            github_username
+                        FROM users
+                        WHERE student_id = ?
+                           OR LOWER(email) = LOWER(?)
+                           OR LOWER(github_username) = LOWER(?)
+                        """,
+                        (
+                            student_id,
+                            email,
+                            github_username,
+                        ),
+                    ).fetchone()
+
+                    if existing_user is None:
+
+                        cursor = connection.execute(
+                            """
+                            INSERT INTO users (
+                                student_id,
+                                name,
+                                email,
+                                github_username,
+                                created_at
+                            )
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                student_id,
+                                name,
+                                email,
+                                github_username,
+                                datetime.now(
+                                    timezone.utc
+                                ).isoformat(),
+                            ),
+                        )
+
+                        user_id = cursor.lastrowid
+
+                    else:
+
+                        same_student = (
+                            existing_user["student_id"]
+                            == student_id
+                        )
+
+                        same_email = (
+                            existing_user["email"].lower()
+                            == email.lower()
+                        )
+
+                        same_github = (
+                            existing_user[
+                                "github_username"
+                            ].lower()
+                            == github_username.lower()
+                        )
+
+                        if not (
+                            same_student
+                            and same_email
+                            and same_github
+                        ):
+                            raise ValueError(
+                                "The student ID, email, or GitHub "
+                                "username is already registered "
+                                "to another account."
+                            )
+
+                        user_id = existing_user["id"]
+
+                        connection.execute(
+                            """
+                            UPDATE users
+                            SET name = ?
+                            WHERE id = ?
+                            """,
+                            (
+                                name,
+                                user_id,
+                            ),
+                        )
+
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO enrolments (
+                            user_id,
+                            course_id,
+                            enrolled_at
+                        )
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            user_id,
+                            course["id"],
+                            datetime.now(
+                                timezone.utc
+                            ).isoformat(),
+                        ),
+                    )
+
+                success = True
+
+            except ValueError as exception:
+                error = str(exception)
+
+            except sqlite3.IntegrityError:
+                error = (
+                    "That student ID, email, or GitHub username "
+                    "has already been registered."
+                )
+
+    return render_template_string(
+        """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Join {{ course["code"] }}</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .card {
+            max-width: 560px;
+            margin: 30px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .course-title {
+            margin-bottom: 25px;
+            color: #6b7280;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 11px;
+            margin-bottom: 17px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .message {
+            padding: 13px;
+            margin-bottom: 20px;
+            border-radius: 7px;
+        }
+
+        .error {
+            color: #991b1b;
+            background: #fee2e2;
+        }
+
+        .success {
+            color: #166534;
+            background: #dcfce7;
+        }
+
+        .hint {
+            margin-top: -10px;
+            margin-bottom: 17px;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .summary {
+            padding: 18px;
+            background: #f9fafb;
+            border-radius: 8px;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+
+        <h1>Join {{ course["code"] }}</h1>
+
+        <div class="course-title">
+            {{ course["title"] }}
+        </div>
+
+        {% if success %}
+
+            <div class="message success">
+                Enrolment successful.
+            </div>
+
+            <div class="summary">
+                <strong>You have joined {{ course["code"] }}.</strong>
+
+                <p>
+                    Your GitHub username is now linked to your
+                    AutoGrade profile.
+                </p>
+
+                <p>
+                    When you push an assignment to GitHub,
+                    AutoGrade will associate the result with you.
+                </p>
+            </div>
+
+        {% else %}
+
+            {% if error %}
+                <div class="message error">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="post">
+
+                <label for="name">
+                    Full name
+                </label>
+
+                <input
+                    id="name"
+                    name="name"
+                    value="{{ request.form.get('name', '') }}"
+                    required
+                    autofocus
+                >
+
+                <label for="student_id">
+                    Student ID
+                </label>
+
+                <input
+                    id="student_id"
+                    name="student_id"
+                    value="{{ request.form.get('student_id', '') }}"
+                    required
+                >
+
+                <label for="email">
+                    Email address
+                </label>
+
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value="{{ request.form.get('email', '') }}"
+                    required
+                >
+
+                <div class="hint">
+                    Enter the email address used in your
+                    class records. It does not need to match
+                    your GitHub email.
+                </div>
+
+                <label for="github_username">
+                    GitHub username
+                </label>
+
+                <input
+                    id="github_username"
+                    name="github_username"
+                    value="{{
+                        request.form.get(
+                            'github_username',
+                            ''
+                        )
+                    }}"
+                    placeholder="For example: cookiemo729"
+                    required
+                >
+
+                <div class="hint">
+                    Enter only your GitHub username, not the
+                    full repository URL.
+                </div>
+
+                <button type="submit">
+                    Join Course
+                </button>
+
+            </form>
+
+        {% endif %}
+
+    </div>
+
+</body>
+</html>
+        """,
+        course=course,
+        error=error,
+        success=success,
+    )
+
 @app.get("/")
 def home():
     submissions = get_latest_submissions()
