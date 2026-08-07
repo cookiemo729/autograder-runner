@@ -756,14 +756,6 @@ def home():
             score_class = "score-zero"
             score_icon = "●"
 
-        display_time = format_submission_time(
-            submission["submitted_at"]
-        )
-        passed = bool(submission["passed"])
-        status_text = "Passed" if passed else "Failed"
-        status_class = "passed" if passed else "failed"
-        student = submission["repository"].split("/")[0]
-
         rows.append(
             f"""
             <tr>
