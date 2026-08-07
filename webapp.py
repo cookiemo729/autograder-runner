@@ -798,6 +798,12 @@ def home():
             </tr>
             """
         )
+    print(
+        "DEBUG:",
+        submission["repository"],
+        submission["student_name"],
+    )
+
 
     if rows:
         table_body = "\n".join(rows)
