@@ -218,15 +218,36 @@ def get_latest_submissions():
         return connection.execute(
             """
             SELECT
-                repository,
-                assignment,
-                commit_sha,
-                score,
-                max_score,
-                passed,
-                submitted_at
+                submissions.repository,
+                submissions.assignment,
+                submissions.commit_sha,
+                submissions.score,
+                submissions.max_score,
+                submissions.passed,
+                submissions.submitted_at,
+
+                users.name AS student_name,
+                users.student_id,
+                users.email,
+                users.github_username
+
             FROM submissions
-            ORDER BY submitted_at DESC
+
+            LEFT JOIN users
+                ON LOWER(users.github_username)
+                =
+                LOWER(
+                    SUBSTR(
+                        submissions.repository,
+                        1,
+                        INSTR(
+                            submissions.repository,
+                            '/'
+                        ) - 1
+                    )
+                )
+
+            ORDER BY submissions.submitted_at DESC
             LIMIT 100
             """
         ).fetchall()
@@ -710,7 +731,10 @@ def home():
         status_text = "Passed" if passed else "Failed"
         status_class = "passed" if passed else "failed"
 
-        student = submission["repository"].split("/")[0]
+        student = (
+            submission["student_name"]
+            or submission["repository"].split("/")[0]
+        )
 
         display_time = format_submission_time(
             submission["submitted_at"]
@@ -744,7 +768,13 @@ def home():
         rows.append(
             f"""
             <tr>
-                <td>{student}</td>
+                <td>
+                    <strong>{student}</strong>
+
+                    <div class="student-github">
+                        @{submission["repository"].split("/")[0]}
+                    </div>
+                </td>
 
                 <td>{submission["assignment"]}</td>
 
@@ -831,6 +861,12 @@ def home():
         .card-header {{
             padding: 20px 24px;
             border-bottom: 1px solid #e5e7eb;
+        }}
+
+        .student-github {{
+            margin-top: 4px;
+            color: #6b7280;
+            font-size: 0.85rem;
         }}
 
         table {{
