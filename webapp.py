@@ -9,6 +9,9 @@ import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 
 from flask import (
     Flask,
@@ -16,6 +19,7 @@ from flask import (
     redirect,
     render_template_string,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -252,6 +256,21 @@ def get_latest_submissions():
         ).fetchall()
 
 
+def format_excel_time(utc_string):
+
+    if not utc_string:
+        return ""
+
+    utc_time = datetime.fromisoformat(utc_string)
+
+    singapore_time = utc_time.astimezone(
+        ZoneInfo("Asia/Singapore")
+    )
+
+    return singapore_time.strftime(
+        "%d %b %Y %I:%M %p"
+    )
+
 def format_submission_time(utc_string):
 
     utc_time = datetime.fromisoformat(utc_string)
@@ -310,6 +329,123 @@ def get_course_by_join_code(join_code):
             """,
             (join_code,),
         ).fetchone()
+
+def get_is216_export_rows():
+
+    join_code = "IS216-AY2627-T1"
+
+    with get_database() as connection:
+
+        course = connection.execute(
+            """
+            SELECT id
+            FROM courses
+            WHERE join_code = ?
+            """,
+            (join_code,),
+        ).fetchone()
+
+        if course is None:
+            return []
+
+        students = connection.execute(
+            """
+            SELECT
+                users.id,
+                users.student_id,
+                users.name,
+                users.email,
+                users.github_username
+            FROM users
+
+            INNER JOIN enrolments
+                ON enrolments.user_id = users.id
+
+            WHERE enrolments.course_id = ?
+
+            ORDER BY users.name
+            """,
+            (course["id"],),
+        ).fetchall()
+
+        export_rows = []
+
+        for student in students:
+
+            for assignment_key in ASSIGNMENTS:
+
+                repository_prefix = (
+                    student["github_username"] + "/%"
+                )
+
+                submission = connection.execute(
+                    """
+                    SELECT
+                        repository,
+                        assignment,
+                        commit_sha,
+                        score,
+                        max_score,
+                        passed,
+                        submitted_at
+                    FROM submissions
+                    WHERE course_id = ?
+                      AND assignment = ?
+                      AND LOWER(repository)
+                          LIKE LOWER(?)
+                    ORDER BY submitted_at DESC
+                    LIMIT 1
+                    """,
+                    (
+                        course["id"],
+                        assignment_key,
+                        repository_prefix,
+                    ),
+                ).fetchone()
+
+                if submission:
+
+                    status = (
+                        "Passed"
+                        if submission["passed"]
+                        else "Failed"
+                    )
+
+                    export_rows.append({
+                        "student_id": student["student_id"],
+                        "name": student["name"],
+                        "email": student["email"],
+                        "github_username": (
+                            student["github_username"]
+                        ),
+                        "assignment": assignment_key,
+                        "score": submission["score"],
+                        "max_score": submission["max_score"],
+                        "status": status,
+                        "submitted_at": format_excel_time(
+                            submission["submitted_at"]
+                        ),
+                        "commit_sha": submission["commit_sha"],
+                    })
+
+                else:
+
+                    export_rows.append({
+                        "student_id": student["student_id"],
+                        "name": student["name"],
+                        "email": student["email"],
+                        "github_username": (
+                            student["github_username"]
+                        ),
+                        "assignment": assignment_key,
+                        "score": "",
+                        "max_score": "",
+                        "status": "Not submitted",
+                        "submitted_at": "",
+                        "commit_sha": "",
+                    })
+
+        return export_rows
 
 @app.route("/join/<join_code>", methods=["GET", "POST"])
 def join_course(join_code):
@@ -1202,11 +1338,31 @@ def admin():
             padding: 3px 6px;
             border-radius: 4px;
         }
+        .export-button {
+            display: inline-block;
+            padding: 10px 16px;
+            border-radius: 6px;
+            background: #15803d;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .export-button:hover {
+            background: #166534;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
+
+        <a
+            href="{{ url_for('admin_export_results') }}"
+            class="export-button"
+        >
+            Export IS216 Results
+        </a>
 
         <div class="topbar">
             <div>
@@ -1466,6 +1622,99 @@ def admin_delete_course(course_id):
 
     return redirect(
         url_for("admin")
+    )
+
+@app.get("/admin/export/results.xlsx")
+def admin_export_results():
+
+    if not admin_is_logged_in():
+        return redirect(
+            url_for("admin")
+        )
+
+    rows = get_is216_export_rows()
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "IS216 Results"
+
+    headers = [
+        "Student ID",
+        "Name",
+        "Email",
+        "GitHub Username",
+        "Assignment",
+        "Score",
+        "Max Score",
+        "Status",
+        "Submitted (SGT)",
+        "Commit SHA",
+    ]
+
+    worksheet.append(headers)
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="D9EAF7",
+    )
+
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+
+    for row in rows:
+        worksheet.append([
+            row["student_id"],
+            row["name"],
+            row["email"],
+            row["github_username"],
+            row["assignment"],
+            row["score"],
+            row["max_score"],
+            row["status"],
+            row["submitted_at"],
+            row["commit_sha"],
+        ])
+
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+
+    column_widths = {
+        "A": 15,
+        "B": 24,
+        "C": 30,
+        "D": 22,
+        "E": 16,
+        "F": 10,
+        "G": 12,
+        "H": 16,
+        "I": 24,
+        "J": 42,
+    }
+
+    for column, width in column_widths.items():
+        worksheet.column_dimensions[column].width = width
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    filename = (
+        "IS216_results_"
+        + datetime.now(
+            ZoneInfo("Asia/Singapore")
+        ).strftime("%Y%m%d_%H%M")
+        + ".xlsx"
+    )
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
     )
 
 @app.get("/admin/logout")

@@ -3,3 +3,4 @@ PyYAML
 lxml
 pytest
 Flask
+openpyxl
