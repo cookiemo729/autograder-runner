@@ -42,14 +42,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DATABASE_PATH = PROJECT_ROOT / "autograder.db"
 
 ASSIGNMENTS = {
+    "wk1ex1": PROJECT_ROOT / "examples" / "wk1ex1",
+    "wk1ex3": PROJECT_ROOT / "examples" / "wk1ex3",
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
 }
 
 ASSIGNMENT_COURSES = {
+    "wk1ex1": "IS216-AY2627-T1",
+    "wk1ex3": "IS216-AY2627-T1",
     "wk1ex4": "IS216-AY2627-T1",
 }
 
 ALLOWED_REPOSITORIES = {
+    "cookiemo729/wk1ex1-student-template",
+    "cookiemo729/wk1ex3-student-template",
     "cookiemo729/wk1ex4-student-template",
 }
 
