@@ -6,7 +6,7 @@ browser: chromium
 
 headless: true
 
-entry: wk1exercise3.html
+entry: index.html
 
 testcases:
 
