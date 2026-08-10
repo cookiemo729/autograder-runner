@@ -53,10 +53,10 @@ ASSIGNMENT_COURSES = {
     "wk1ex4": "IS216-AY2627-T1",
 }
 
-ALLOWED_REPOSITORIES = {
-    "cookiemo729/wk1ex1-student-template",
-    "cookiemo729/wk1ex3-student-template",
-    "cookiemo729/wk1ex4-student-template",
+ASSIGNMENT_REPOSITORY_NAMES = {
+    "wk1ex1": "wk1ex1-student-template",
+    "wk1ex3": "wk1ex3-student-template",
+    "wk1ex4": "wk1ex4-student-template",
 }
 
 AUTOGRADER_API_KEY = os.environ.get("AUTOGRADER_API_KEY")
@@ -1739,20 +1739,20 @@ def health():
 
 @app.post("/api/grade")
 def grade():
-    supplied_key = request.headers.get("X-Autograder-Key", "")
+    # supplied_key = request.headers.get("X-Autograder-Key", "")
 
-    if not AUTOGRADER_API_KEY:
-        return jsonify({
-            "error": "Server API key is not configured"
-        }), 500
+    # if not AUTOGRADER_API_KEY:
+    #     return jsonify({
+    #         "error": "Server API key is not configured"
+    #     }), 500
 
-    if not hmac.compare_digest(
-        supplied_key,
-        AUTOGRADER_API_KEY,
-    ):
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
+    # if not hmac.compare_digest(
+    #     supplied_key,
+    #     AUTOGRADER_API_KEY,
+    # ):
+    #     return jsonify({
+    #         "error": "Unauthorized"
+    #     }), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -1800,9 +1800,68 @@ def grade():
     if assignment_path is None:
         return jsonify({"error": "Unknown assignment"}), 400
 
-    if repository_name not in ALLOWED_REPOSITORIES:
+    if "/" not in repository_name:
+    return jsonify({
+        "error": "Invalid repository name"
+    }), 400
+
+    repository_owner, repository_short_name = (
+        repository_name.split("/", 1)
+    )
+
+    expected_repository_name = (
+        ASSIGNMENT_REPOSITORY_NAMES.get(
+            assignment_key
+        )
+    )
+
+    if expected_repository_name is None:
         return jsonify({
-            "error": "Repository is not allowed"
+            "error": "Unknown assignment repository"
+        }), 400
+
+    if (
+        repository_short_name
+        != expected_repository_name
+    ):
+    return jsonify({
+        "error": (
+            "Repository name does not match "
+            "the assignment"
+        )
+    }), 403
+
+    with get_database() as connection:
+
+    student = connection.execute(
+        """
+        SELECT
+            users.id,
+            users.name,
+            users.github_username
+        FROM users
+
+        INNER JOIN enrolments
+            ON enrolments.user_id = users.id
+
+        WHERE
+            LOWER(users.github_username)
+                = LOWER(?)
+
+            AND enrolments.course_id = ?
+        """,
+        (
+            repository_owner,
+            course_id,
+        ),
+    ).fetchone()
+
+    if student is None:
+        return jsonify({
+            "error": (
+                "GitHub account is not enrolled "
+                "in IS216 AutoGrade"
+            )
         }), 403
 
     repository_url = (
