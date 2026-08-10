@@ -4,21 +4,9 @@ engine: playwright
 
 browser: chromium
 
-headless: false
+headless: true
 
 entry: wk1exercise3.html
-
-actions:
-  - fill:
-      selector: "#num1"
-      value: "$num1"
-
-  - fill:
-      selector: "#num2"
-      value: "$num2"
-
-  - click:
-      selector: "button"
 
 testcases:
 
@@ -29,8 +17,21 @@ testcases:
       num1: "2"
       num2: "3"
 
+    actions:
+      - fill:
+          selector: "#num1"
+          value: "$num1"
+
+      - fill:
+          selector: "#num2"
+          value: "$num2"
+
+      - click:
+          selector: "button"
+
     expect_console:
       equals: "5"
+
 
   - name: 10 + 20 = 30
     points: 10
@@ -39,8 +40,21 @@ testcases:
       num1: "10"
       num2: "20"
 
+    actions:
+      - fill:
+          selector: "#num1"
+          value: "$num1"
+
+      - fill:
+          selector: "#num2"
+          value: "$num2"
+
+      - click:
+          selector: "button"
+
     expect_console:
       equals: "30"
+
 
   - name: -5 + 8 = 3
     points: 10
@@ -49,8 +63,21 @@ testcases:
       num1: "-5"
       num2: "8"
 
+    actions:
+      - fill:
+          selector: "#num1"
+          value: "$num1"
+
+      - fill:
+          selector: "#num2"
+          value: "$num2"
+
+      - click:
+          selector: "button"
+
     expect_console:
       equals: "3"
+
 
   - name: Reject non-numeric input
     points: 10
@@ -58,6 +85,18 @@ testcases:
     inputs:
       num1: "abc"
       num2: "5"
+
+    actions:
+      - fill:
+          selector: "#num1"
+          value: "$num1"
+
+      - fill:
+          selector: "#num2"
+          value: "$num2"
+
+      - click:
+          selector: "button"
 
     expect_console:
       equals: "Please enter numbers only"
