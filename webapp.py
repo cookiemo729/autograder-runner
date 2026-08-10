@@ -1801,9 +1801,9 @@ def grade():
         return jsonify({"error": "Unknown assignment"}), 400
 
     if "/" not in repository_name:
-    return jsonify({
-        "error": "Invalid repository name"
-    }), 400
+        return jsonify({
+            "error": "Invalid repository name"
+        }), 400
 
     repository_owner, repository_short_name = (
         repository_name.split("/", 1)
@@ -1824,45 +1824,45 @@ def grade():
         repository_short_name
         != expected_repository_name
     ):
-    return jsonify({
-        "error": (
-            "Repository name does not match "
-            "the assignment"
-        )
-    }), 403
+        return jsonify({
+            "error": (
+                "Repository name does not match "
+                "the assignment"
+            )
+        }), 403
 
     with get_database() as connection:
 
-    student = connection.execute(
-        """
-        SELECT
-            users.id,
-            users.name,
-            users.github_username
-        FROM users
+        student = connection.execute(
+            """
+            SELECT
+                users.id,
+                users.name,
+                users.github_username
+            FROM users
 
-        INNER JOIN enrolments
-            ON enrolments.user_id = users.id
+            INNER JOIN enrolments
+                ON enrolments.user_id = users.id
 
-        WHERE
-            LOWER(users.github_username)
-                = LOWER(?)
+            WHERE
+                LOWER(users.github_username)
+                    = LOWER(?)
 
-            AND enrolments.course_id = ?
-        """,
-        (
-            repository_owner,
-            course_id,
-        ),
-    ).fetchone()
+                AND enrolments.course_id = ?
+            """,
+            (
+                repository_owner,
+                course_id,
+            ),
+        ).fetchone()
 
-    if student is None:
-        return jsonify({
-            "error": (
-                "GitHub account is not enrolled "
-                "in IS216 AutoGrade"
-            )
-        }), 403
+        if student is None:
+            return jsonify({
+                "error": (
+                    "GitHub account is not enrolled "
+                    "in IS216 AutoGrade"
+                )
+            }), 403
 
     repository_url = (
         f"https://github.com/{repository_name}.git"
