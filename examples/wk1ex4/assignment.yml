@@ -4,9 +4,9 @@ engine: playwright
 
 browser: chromium
 
-headless: false
+headless: true
 
-entry: wk1exercise4_alt.html
+entry: index.html
 
 testcases:
 
