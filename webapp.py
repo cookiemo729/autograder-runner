@@ -45,18 +45,28 @@ ASSIGNMENTS = {
     "wk1ex1": PROJECT_ROOT / "examples" / "wk1ex1",
     "wk1ex3": PROJECT_ROOT / "examples" / "wk1ex3",
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
+
+    "cs201lab1q1": (
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q1"
+    ),
 }
 
 ASSIGNMENT_COURSES = {
     "wk1ex1": "IS216-AY2627-T1",
     "wk1ex3": "IS216-AY2627-T1",
     "wk1ex4": "IS216-AY2627-T1",
+
+    "cs201lab1q1": "CS201-AY2627-T1",
 }
 
 ASSIGNMENT_REPOSITORY_NAMES = {
     "wk1ex1": "wk1ex1-student-template",
     "wk1ex3": "wk1ex3-student-template",
     "wk1ex4": "wk1ex4-student-template",
+
+    "cs201lab1q1": "cs201lab1q1-student-template",
 }
 
 AUTOGRADER_API_KEY = os.environ.get("AUTOGRADER_API_KEY")
@@ -152,6 +162,24 @@ def initialize_database():
                 "IS216",
                 "Web Application Development 2",
                 "IS216-AY2627-T1",
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO courses (
+                code,
+                title,
+                join_code,
+                created_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "CS201",
+                "Data Structures and Algorithms",
+                "CS201-AY2627-T1",
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
