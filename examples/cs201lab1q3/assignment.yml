@@ -1,0 +1,39 @@
+title: CS201 Lab 1 Q3 - Doubly Linked List
+
+engine: java
+
+student_files:
+  - DoublyLinkedList.java
+
+test_file: HiddenTest.java
+test_class: HiddenTest
+
+compile_timeout: 10
+run_timeout: 5
+
+testcases:
+
+  - id: example_one
+    name: group - one null
+    points: 10
+    timeout: 2
+
+  - id: example_two
+    name: group - multiple nulls
+    points: 10
+    timeout: 2
+
+  - id: no_nulls
+    name: group - no null values
+    points: 10
+    timeout: 2
+
+  - id: all_nulls
+    name: group - all null values
+    points: 10
+    timeout: 2
+
+  - id: nulls_at_ends
+    name: group - nulls at both ends
+    points: 10
+    timeout: 2

@@ -1,0 +1,45 @@
+title: CS201 Lab 1 Q2 - Singly Linked List
+
+engine: java
+
+student_files:
+  - Node.java
+  - SinglyLinkedList.java
+
+test_file: HiddenTest.java
+test_class: HiddenTest
+
+compile_timeout: 10
+run_timeout: 5
+
+testcases:
+
+  - id: tostring_basic
+    name: toString - basic
+    points: 10
+    timeout: 2
+
+  - id: remove_last_single
+    name: removeLast - single element
+    points: 10
+    timeout: 2
+
+  - id: remove_last_multiple
+    name: removeLast - multiple elements
+    points: 10
+    timeout: 2
+
+  - id: reverse_basic
+    name: reverse - basic
+    points: 10
+    timeout: 2
+
+  - id: reverse_single
+    name: reverse - single element
+    points: 5
+    timeout: 2
+
+  - id: reverse_empty
+    name: reverse - empty list
+    points: 5
+    timeout: 2

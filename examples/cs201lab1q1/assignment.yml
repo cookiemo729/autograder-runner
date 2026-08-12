@@ -1,0 +1,34 @@
+title: CS201 Lab 1 Q1 - Arrays
+
+engine: java
+
+student_files:
+  - NumbersArray.java
+
+test_file: HiddenTest.java
+test_class: HiddenTest
+
+compile_timeout: 10
+run_timeout: 5
+
+testcases:
+
+  - id: max_basic
+    name: findMax - basic
+    points: 10
+    timeout: 2
+
+  - id: duplicates_basic
+    name: findDuplicates - basic
+    points: 10
+    timeout: 2
+
+  - id: unique_basic
+    name: findUnique - basic
+    points: 10
+    timeout: 2
+
+  - id: hidden_case
+    name: Additional hidden case
+    points: 10
+    timeout: 2

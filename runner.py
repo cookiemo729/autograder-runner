@@ -17,6 +17,10 @@ def grade_assignment(assignment_path, submission_path):
         f"{assignment_path}/assignment.yml"
     )
 
+    assignment["_assignment_folder"] = (
+        assignment_folder
+    )
+
     engine = EngineFactory.create(
         assignment["engine"]
     )
@@ -29,10 +33,17 @@ def grade_assignment(assignment_path, submission_path):
     return assignment, result
 
 
-def grade_assignment(assignment_folder, submission_folder):
+def grade_assignment(
+    assignment_folder,
+    submission_folder,
+):
 
     assignment = load_assignment(
         f"{assignment_folder}/assignment.yml"
+    )
+
+    assignment["_assignment_folder"] = (
+        assignment_folder
     )
 
     engine = EngineFactory.create(
