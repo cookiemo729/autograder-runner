@@ -1132,6 +1132,32 @@ def home():
                 min-width: 900px;
             }}
         }}
+        .search-row {{
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 14px;
+        }}
+
+        .search-row input {{
+            width: 420px;
+            max-width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 0.95rem;
+        }}
+
+        .search-row input:focus {{
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+        }}
+
+        #resultCount {{
+            color: #6b7280;
+            font-size: 0.9rem;
+        }}
     </style>
 </head>
 
@@ -1146,9 +1172,20 @@ def home():
         <div class="card">
             <div class="card-header">
                 <strong>Latest submissions</strong>
+
+                <div class="search-row">
+                    <input
+                        type="text"
+                        id="submissionSearch"
+                        placeholder="Search student, GitHub username, assignment..."
+                        oninput="filterSubmissions()"
+                    >
+
+                    <span id="resultCount"></span>
+                </div>
             </div>
 
-            <table>
+            <table id="submissionsTable">
                 <thead>
                     <tr>
                         <th>Student</th>
@@ -1166,6 +1203,45 @@ def home():
             </table>
         </div>
     </div>
+    <script>
+        function filterSubmissions() {{
+            const search = document
+                .getElementById("submissionSearch")
+                .value
+                .toLowerCase()
+                .trim();
+
+            const table = document.getElementById(
+                "submissionsTable"
+            );
+
+            const rows = table.querySelectorAll(
+                "tbody tr"
+            );
+
+            let visible = 0;
+
+            rows.forEach(row => {{
+                const text = row.innerText.toLowerCase();
+
+                const matches = text.includes(search);
+
+                row.style.display = matches ? "" : "none";
+
+                if (matches) {{
+                    visible++;
+                }}
+            }});
+
+            document.getElementById(
+                "resultCount"
+            ).textContent =
+                visible + " submission" +
+                (visible === 1 ? "" : "s");
+        }}
+
+        filterSubmissions();
+        </script>
 </body>
 </html>
 """
