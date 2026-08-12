@@ -1,5 +1,6 @@
-public class SinglyLinkedList<E> {
-    
+import java.util.*;
+
+public class SinglyLinkedList<E extends Comparable<E>> {
     private Node<E> head = null;
     private Node<E> tail = null;
     private int size = 0;
@@ -65,16 +66,57 @@ public class SinglyLinkedList<E> {
         return answer;
     }
 
-    // Write your codes below
+    /*************************************/
     public String toString(){
-     
+        String result = "";
+        if (isEmpty()){
+            return result;
+        }
+
+        Node<E> current = head;
+        while (current != null){
+            result += current.getElement();
+            current = current.getNext();
+        }
+        return result;
     }
 
     public E removeLast(){
-      
+        if (isEmpty()){
+            return null;
+        }
+
+        Node<E> last = tail;
+        
+        if (head == tail){
+            head = null;
+            tail = null;
+            size--;
+            return last.getElement();
+        }
+
+        Node<E> current = head;
+        while (current.getNext() != tail){
+            current = current.getNext();
+        }
+        current.setNext(null);
+        tail = current;
+        size--;
+        return last.getElement();
     }
 
-    public void reverse(){       
-                 
+    public void reverse(){      
+        Node<E> previous = null; 
+        Node<E> current = head; 
+        Node<E> next = null; 
+        
+        tail = head; 
+        while (current != null) {
+			next = current.getNext(); 
+			current.setNext(previous); 
+			previous = current; 
+			current = next; 
+        }
+        head = previous; 
     }
 }

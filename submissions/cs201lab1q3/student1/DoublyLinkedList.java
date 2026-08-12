@@ -1,3 +1,6 @@
+import java.util.ArrayList;
+import java.util.List;
+
 public class DoublyLinkedList<E> {
 
     private static class Node<E> {
@@ -115,6 +118,30 @@ public class DoublyLinkedList<E> {
     }
 
     public void group(){
-
+        Node<E> current = header.getNext();
+        List<E> holder = new ArrayList<>();
+        while(current != trailer){
+            if(current.getElement()!=null){ //get all non null values
+                holder.add(current.getElement());
+            }
+            current = current.getNext();
+        }
+        current = header;
+        int numberOfNulls = size -  holder.size();
+        while(numberOfNulls != 0){ //adds all the null values. 
+            current.setNext(new Node<>(null, current, null));
+            current = current.getNext();
+            numberOfNulls --;
+        }
+        int count = 0;
+        while(count != holder.size()){ //adds all the non null values. 
+            Node<E> newest = new Node<>(holder.get(count), current, null);
+            current.setNext(newest);
+            current = newest;
+            count++;
+        }
+        current.setNext(new Node<>(null, current, trailer)); // set the next for current to be the trailer
+        trailer.setPrev(current); // set the trailer's prev node to be the current
+        trailer = current.getNext(); // set the trailer
     }
 }
