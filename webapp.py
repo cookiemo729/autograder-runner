@@ -51,6 +51,16 @@ ASSIGNMENTS = {
         / "examples"
         / "cs201lab1q1"
     ),
+    "cs201lab1q2": (
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q2"
+    ),
+    "cs201lab1q3": (
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q3"
+    ),    
 }
 
 ASSIGNMENT_COURSES = {
@@ -59,6 +69,8 @@ ASSIGNMENT_COURSES = {
     "wk1ex4": "IS216-AY2627-T1",
 
     "cs201lab1q1": "CS201-AY2627-T1",
+    "cs201lab1q2": "CS201-AY2627-T1",
+    "cs201lab1q3": "CS201-AY2627-T1",
 }
 
 ASSIGNMENT_REPOSITORY_NAMES = {
@@ -67,6 +79,8 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "wk1ex4": "wk1ex4-student-template",
 
     "cs201lab1q1": "cs201lab1q1-student-template",
+    "cs201lab1q2": "cs201lab1q2-student-template",
+    "cs201lab1q3": "cs201lab1q3-student-template",
 }
 
 AUTOGRADER_API_KEY = os.environ.get("AUTOGRADER_API_KEY")
