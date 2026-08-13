@@ -55,6 +55,9 @@ ASSIGNMENTS = {
     "cs201lab1q3": (
         PROJECT_ROOT / "examples" / "cs201lab1q3"
     ),
+    "cs201lab2": (
+        PROJECT_ROOT / "examples" / "cs201lab2"
+    ),
 }
 
 ASSIGNMENT_COURSES = {
@@ -65,6 +68,7 @@ ASSIGNMENT_COURSES = {
     "cs201lab1q1": "CS201-AY2627-T1",
     "cs201lab1q2": "CS201-AY2627-T1",
     "cs201lab1q3": "CS201-AY2627-T1",
+    "cs201lab2": "CS201-AY2627-T1",
 }
 
 ASSIGNMENT_REPOSITORY_NAMES = {
@@ -75,6 +79,7 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "cs201lab1q1": "cs201lab1q1-student-template",
     "cs201lab1q2": "cs201lab1q2-student-template",
     "cs201lab1q3": "cs201lab1q3-student-template",
+    "cs201lab2": "cs201lab2-student-template",
 }
 
 
@@ -299,12 +304,14 @@ def get_latest_submissions():
         return connection.execute(
             """
             SELECT
+                s.id,
                 s.repository,
                 s.assignment,
                 s.commit_sha,
                 s.score,
                 s.max_score,
                 s.passed,
+                s.tests_json,
                 s.submitted_at,
                 s.course_id,
 
@@ -1088,6 +1095,13 @@ def home():
                         ●
                         {submission["score"]}/{submission["max_score"]}
                     </span>
+                    {
+                        f'<div class="detail-link">'
+                        f'<a href="/admin/submission/{submission["id"]}">'
+                        f'View details</a></div>'
+                        if admin_is_logged_in()
+                        else ""
+                    }
                 </td>
 
                 <td>
@@ -1238,6 +1252,21 @@ def home():
             color: #991b1b;
         }}
 
+        .detail-link {{
+            margin-top: 7px;
+            font-size: 0.82rem;
+        }}
+
+        .detail-link a {{
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: bold;
+        }}
+
+        .detail-link a:hover {{
+            text-decoration: underline;
+        }}
+
         .empty {{
             text-align: center;
             color: #6b7280;
@@ -1380,6 +1409,208 @@ def home():
 
         filterSubmissions();
     </script>
+</body>
+</html>
+"""
+
+
+
+@app.get("/admin/submission/<int:submission_id>")
+def admin_submission_detail(submission_id):
+
+    if not admin_is_logged_in():
+        return redirect(url_for("admin"))
+
+    with get_database() as connection:
+        submission = connection.execute(
+            """
+            SELECT
+                s.id,
+                s.repository,
+                s.assignment,
+                s.commit_sha,
+                s.score,
+                s.max_score,
+                s.passed,
+                s.tests_json,
+                s.submitted_at,
+                u.name AS student_name,
+                u.student_id,
+                e.section,
+                c.code AS course_code
+            FROM submissions AS s
+            LEFT JOIN users AS u
+                ON LOWER(u.github_username) =
+                   LOWER(
+                       SUBSTR(
+                           s.repository,
+                           1,
+                           INSTR(s.repository, '/') - 1
+                       )
+                   )
+            LEFT JOIN enrolments AS e
+                ON e.user_id = u.id
+               AND e.course_id = s.course_id
+            LEFT JOIN courses AS c
+                ON c.id = s.course_id
+            WHERE s.id = ?
+            """,
+            (submission_id,),
+        ).fetchone()
+
+    if submission is None:
+        return "Submission not found.", 404
+
+    try:
+        tests = json.loads(submission["tests_json"] or "[]")
+    except (TypeError, json.JSONDecodeError):
+        tests = []
+
+    owner = submission["repository"].split("/")[0]
+    student = submission["student_name"] or owner
+    section_display = format_section(submission["section"])
+    status = "Passed" if submission["passed"] else "Failed"
+    submitted = format_excel_time(submission["submitted_at"])
+
+    rows = []
+    for test in tests:
+        passed = bool(test.get("passed"))
+        symbol = "✓" if passed else "✗"
+        css = "pass" if passed else "fail"
+        name = escape(str(test.get("name", test.get("id", "Test"))))
+        awarded = escape(str(test.get("awarded", 0)))
+        points = escape(str(test.get("points", 0)))
+        rows.append(
+            f"""
+            <tr>
+                <td class="{css}">{symbol}</td>
+                <td>{name}</td>
+                <td class="marks">{awarded}/{points}</td>
+            </tr>
+            """
+        )
+
+    tests_html = "\n".join(rows) if rows else """
+        <tr>
+            <td colspan="3" class="empty">
+                No per-test breakdown was stored for this submission.
+            </td>
+        </tr>
+    """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submission Details - AutoGrade</title>
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }}
+        .container {{ max-width: 900px; margin: auto; }}
+        .back {{
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: bold;
+        }}
+        .card {{
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0,0,0,.08);
+            padding: 26px;
+            margin-bottom: 22px;
+        }}
+        h1 {{ margin: 0 0 6px; }}
+        .subtitle {{ color: #6b7280; margin-bottom: 22px; }}
+        .summary {{
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 11px 18px;
+        }}
+        .label {{ color: #6b7280; font-weight: bold; }}
+        .score {{ font-size: 1.15rem; font-weight: bold; }}
+        code {{
+            background: #f3f4f6;
+            padding: 3px 6px;
+            border-radius: 5px;
+        }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{
+            padding: 13px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }}
+        th {{ background: #f9fafb; color: #4b5563; }}
+        .marks {{ text-align: right; font-weight: bold; }}
+        .pass {{ width: 40px; color: #15803d; font-weight: bold; }}
+        .fail {{ width: 40px; color: #dc2626; font-weight: bold; }}
+        .empty {{ text-align: center; color: #6b7280; padding: 28px; }}
+        @media (max-width: 650px) {{
+            .summary {{ grid-template-columns: 1fr; gap: 4px; }}
+            .label {{ margin-top: 9px; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a class="back" href="/">← Back to dashboard</a>
+
+        <div class="card">
+            <h1>Submission Details</h1>
+            <div class="subtitle">Instructor-only grading breakdown</div>
+
+            <div class="summary">
+                <div class="label">Student</div>
+                <div>{escape(str(student))} (@{escape(owner)})</div>
+
+                <div class="label">Student ID</div>
+                <div>{escape(str(submission["student_id"] or "-"))}</div>
+
+                <div class="label">Course / Section</div>
+                <div>
+                    {escape(str(submission["course_code"] or "-"))}
+                    / {escape(section_display)}
+                </div>
+
+                <div class="label">Assignment</div>
+                <div>{escape(str(submission["assignment"]))}</div>
+
+                <div class="label">Score</div>
+                <div class="score">
+                    {submission["score"]}/{submission["max_score"]} — {status}
+                </div>
+
+                <div class="label">Commit</div>
+                <div><code>{escape(submission["commit_sha"])}</code></div>
+
+                <div class="label">Submitted</div>
+                <div>{escape(submitted)}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Test Results</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Test</th>
+                        <th class="marks">Marks</th>
+                    </tr>
+                </thead>
+                <tbody>{tests_html}</tbody>
+            </table>
+        </div>
+    </div>
 </body>
 </html>
 """
