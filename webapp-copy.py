@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import os
@@ -6,10 +7,11 @@ import sqlite3
 import subprocess
 import tempfile
 from datetime import datetime, timezone, timedelta
-from html import escape
-from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 
 from flask import (
     Flask,
@@ -21,8 +23,6 @@ from flask import (
     session,
     url_for,
 )
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 
 from runner import grade_assignment
 
@@ -47,17 +47,20 @@ ASSIGNMENTS = {
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
 
     "cs201lab1q1": (
-        PROJECT_ROOT / "examples" / "cs201lab1q1"
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q1"
     ),
     "cs201lab1q2": (
-        PROJECT_ROOT / "examples" / "cs201lab1q2"
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q2"
     ),
     "cs201lab1q3": (
-        PROJECT_ROOT / "examples" / "cs201lab1q3"
-    ),
-    "cs201lab2": (
-        PROJECT_ROOT / "examples" / "cs201lab2"
-    ),
+        PROJECT_ROOT
+        / "examples"
+        / "cs201lab1q3"
+    ),    
 }
 
 ASSIGNMENT_COURSES = {
@@ -68,7 +71,6 @@ ASSIGNMENT_COURSES = {
     "cs201lab1q1": "CS201-AY2627-T1",
     "cs201lab1q2": "CS201-AY2627-T1",
     "cs201lab1q3": "CS201-AY2627-T1",
-    "cs201lab2": "CS201-AY2627-T1",
 }
 
 ASSIGNMENT_REPOSITORY_NAMES = {
@@ -79,8 +81,9 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "cs201lab1q1": "cs201lab1q1-student-template",
     "cs201lab1q2": "cs201lab1q2-student-template",
     "cs201lab1q3": "cs201lab1q3-student-template",
-    "cs201lab2": "cs201lab2-student-template",
 }
+
+AUTOGRADER_API_KEY = os.environ.get("AUTOGRADER_API_KEY")
 
 
 def get_database():
@@ -124,7 +127,6 @@ def initialize_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 course_id INTEGER NOT NULL,
-                section TEXT,
                 enrolled_at TEXT NOT NULL,
 
                 UNIQUE(user_id, course_id),
@@ -196,37 +198,20 @@ def initialize_database():
             ),
         )
 
-        submission_columns = connection.execute(
+        columns = connection.execute(
             "PRAGMA table_info(submissions)"
         ).fetchall()
 
-        submission_column_names = {
+        column_names = {
             column[1]
-            for column in submission_columns
+            for column in columns
         }
 
-        if "course_id" not in submission_column_names:
+        if "course_id" not in column_names:
             connection.execute(
                 """
                 ALTER TABLE submissions
                 ADD COLUMN course_id INTEGER
-                """
-            )
-
-        enrolment_columns = connection.execute(
-            "PRAGMA table_info(enrolments)"
-        ).fetchall()
-
-        enrolment_column_names = {
-            column[1]
-            for column in enrolment_columns
-        }
-
-        if "section" not in enrolment_column_names:
-            connection.execute(
-                """
-                ALTER TABLE enrolments
-                ADD COLUMN section TEXT
                 """
             )
 
@@ -260,7 +245,6 @@ def save_result(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(repository, assignment, commit_sha)
             DO UPDATE SET
-                course_id = excluded.course_id,
                 score = excluded.score,
                 max_score = excluded.max_score,
                 passed = excluded.passed,
@@ -279,22 +263,6 @@ def save_result(
                 submitted_at,
             ),
         )
-
-
-def format_section(section):
-
-    if section is None:
-        return "-"
-
-    section = str(section).strip()
-
-    if not section:
-        return "-"
-
-    if section.lower().startswith("g"):
-        return section.upper()
-
-    return f"G{section}"
 
 
 def get_latest_submissions():
@@ -316,11 +284,7 @@ def get_latest_submissions():
                 u.name AS student_name,
                 u.student_id,
                 u.email,
-                u.github_username,
-
-                e.section,
-                c.code AS course_code,
-                c.join_code AS course_join_code
+                u.github_username
 
             FROM submissions AS s
 
@@ -333,13 +297,6 @@ def get_latest_submissions():
                            INSTR(s.repository, '/') - 1
                        )
                    )
-
-            LEFT JOIN enrolments AS e
-                ON e.user_id = u.id
-               AND e.course_id = s.course_id
-
-            LEFT JOIN courses AS c
-                ON c.id = s.course_id
 
             ORDER BY s.submitted_at DESC
             LIMIT 100
@@ -361,7 +318,6 @@ def format_excel_time(utc_string):
     return singapore_time.strftime(
         "%d %b %Y %I:%M %p"
     )
-
 
 def format_submission_time(utc_string):
 
@@ -387,7 +343,6 @@ def format_submission_time(utc_string):
         "%d %b %Y %I:%M %p"
     )
 
-
 def admin_is_logged_in():
     return session.get("admin_logged_in") is True
 
@@ -407,7 +362,6 @@ def get_courses():
             """
         ).fetchall()
 
-
 def get_course_by_join_code(join_code):
 
     with get_database() as connection:
@@ -424,137 +378,122 @@ def get_course_by_join_code(join_code):
             (join_code,),
         ).fetchone()
 
+def get_is216_export_rows():
 
-def get_export_rows():
+    join_code = "IS216-AY2627-T1"
 
     with get_database() as connection:
 
-        courses = connection.execute(
+        course = connection.execute(
+            """
+            SELECT id
+            FROM courses
+            WHERE join_code = ?
+            """,
+            (join_code,),
+        ).fetchone()
+
+        if course is None:
+            return []
+
+        students = connection.execute(
             """
             SELECT
-                id,
-                code,
-                title,
-                join_code
-            FROM courses
-            ORDER BY code, join_code
-            """
+                users.id,
+                users.student_id,
+                users.name,
+                users.email,
+                users.github_username
+            FROM users
+
+            INNER JOIN enrolments
+                ON enrolments.user_id = users.id
+
+            WHERE enrolments.course_id = ?
+
+            ORDER BY users.name
+            """,
+            (course["id"],),
         ).fetchall()
 
         export_rows = []
 
-        for course in courses:
+        for student in students:
 
-            students = connection.execute(
-                """
-                SELECT
-                    users.id,
-                    users.student_id,
-                    users.name,
-                    users.email,
-                    users.github_username,
-                    enrolments.section
-                FROM users
+            for assignment_key in ASSIGNMENTS:
 
-                INNER JOIN enrolments
-                    ON enrolments.user_id = users.id
+                repository_prefix = (
+                    student["github_username"] + "/%"
+                )
 
-                WHERE enrolments.course_id = ?
+                submission = connection.execute(
+                    """
+                    SELECT
+                        repository,
+                        assignment,
+                        commit_sha,
+                        score,
+                        max_score,
+                        passed,
+                        submitted_at
+                    FROM submissions
+                    WHERE course_id = ?
+                      AND assignment = ?
+                      AND LOWER(repository)
+                          LIKE LOWER(?)
+                    ORDER BY submitted_at DESC
+                    LIMIT 1
+                    """,
+                    (
+                        course["id"],
+                        assignment_key,
+                        repository_prefix,
+                    ),
+                ).fetchone()
 
-                ORDER BY
-                    CAST(enrolments.section AS INTEGER),
-                    users.name
-                """,
-                (course["id"],),
-            ).fetchall()
+                if submission:
 
-            course_assignments = [
-                assignment_key
-                for assignment_key, join_code
-                in ASSIGNMENT_COURSES.items()
-                if join_code == course["join_code"]
-            ]
-
-            for student in students:
-
-                for assignment_key in course_assignments:
-
-                    repository_prefix = (
-                        student["github_username"] + "/%"
+                    status = (
+                        "Passed"
+                        if submission["passed"]
+                        else "Failed"
                     )
 
-                    submission = connection.execute(
-                        """
-                        SELECT
-                            repository,
-                            assignment,
-                            commit_sha,
-                            score,
-                            max_score,
-                            passed,
-                            submitted_at
-                        FROM submissions
-                        WHERE course_id = ?
-                          AND assignment = ?
-                          AND LOWER(repository)
-                              LIKE LOWER(?)
-                        ORDER BY submitted_at DESC
-                        LIMIT 1
-                        """,
-                        (
-                            course["id"],
-                            assignment_key,
-                            repository_prefix,
-                        ),
-                    ).fetchone()
-
-                    base_row = {
-                        "course": course["code"],
-                        "course_offering": course["join_code"],
-                        "section": format_section(
-                            student["section"]
-                        ),
+                    export_rows.append({
                         "student_id": student["student_id"],
                         "name": student["name"],
-                        "email": student["email"] or "",
+                        "email": student["email"],
                         "github_username": (
                             student["github_username"]
                         ),
                         "assignment": assignment_key,
-                    }
+                        "score": submission["score"],
+                        "max_score": submission["max_score"],
+                        "status": status,
+                        "submitted_at": format_excel_time(
+                            submission["submitted_at"]
+                        ),
+                        "commit_sha": submission["commit_sha"],
+                    })
 
-                    if submission:
+                else:
 
-                        status = (
-                            "Passed"
-                            if submission["passed"]
-                            else "Failed"
-                        )
-
-                        export_rows.append({
-                            **base_row,
-                            "score": submission["score"],
-                            "max_score": submission["max_score"],
-                            "status": status,
-                            "submitted_at": format_excel_time(
-                                submission["submitted_at"]
-                            ),
-                            "commit_sha": submission["commit_sha"],
-                        })
-
-                    else:
-
-                        export_rows.append({
-                            **base_row,
-                            "score": "",
-                            "max_score": "",
-                            "status": "Not submitted",
-                            "submitted_at": "",
-                            "commit_sha": "",
-                        })
+                    export_rows.append({
+                        "student_id": student["student_id"],
+                        "name": student["name"],
+                        "email": student["email"],
+                        "github_username": (
+                            student["github_username"]
+                        ),
+                        "assignment": assignment_key,
+                        "score": "",
+                        "max_score": "",
+                        "status": "Not submitted",
+                        "submitted_at": "",
+                        "commit_sha": "",
+                    })
 
         return export_rows
-
 
 @app.route("/join/<join_code>", methods=["GET", "POST"])
 def join_course(join_code):
@@ -579,11 +518,6 @@ def join_course(join_code):
             "",
         ).strip()
 
-        section = request.form.get(
-            "section",
-            "",
-        ).strip()
-
         email = request.form.get(
             "email",
             "",
@@ -602,17 +536,10 @@ def join_course(join_code):
         if (
             not name
             or not student_id
-            or not section
             or not email
             or not github_username
         ):
             error = "All fields are required."
-
-        elif not section.isdigit() or int(section) < 1:
-            error = (
-                "Section must be a positive number "
-                "(for example, 1 for G1)."
-            )
 
         elif "@" not in email:
             error = "Please enter a valid email address."
@@ -679,12 +606,8 @@ def join_course(join_code):
                             == student_id
                         )
 
-                        existing_email = (
-                            existing_user["email"] or ""
-                        )
-
                         same_email = (
-                            existing_email.lower()
+                            existing_user["email"].lower()
                             == email.lower()
                         )
 
@@ -722,22 +645,16 @@ def join_course(join_code):
 
                     connection.execute(
                         """
-                        INSERT INTO enrolments (
+                        INSERT OR IGNORE INTO enrolments (
                             user_id,
                             course_id,
-                            section,
                             enrolled_at
                         )
-                        VALUES (?, ?, ?, ?)
-
-                        ON CONFLICT(user_id, course_id)
-                        DO UPDATE SET
-                            section = excluded.section
+                        VALUES (?, ?, ?)
                         """,
                         (
                             user_id,
                             course["id"],
-                            section,
                             datetime.now(
                                 timezone.utc
                             ).isoformat(),
@@ -796,14 +713,8 @@ def join_course(join_code):
         }
 
         .course-title {
-            margin-bottom: 6px;
-            color: #6b7280;
-        }
-
-        .course-offering {
             margin-bottom: 25px;
             color: #6b7280;
-            font-size: 0.92rem;
         }
 
         label {
@@ -879,10 +790,6 @@ def join_course(join_code):
             {{ course["title"] }}
         </div>
 
-        <div class="course-offering">
-            Course offering: {{ course["join_code"] }}
-        </div>
-
         {% if success %}
 
             <div class="message success">
@@ -890,16 +797,7 @@ def join_course(join_code):
             </div>
 
             <div class="summary">
-                <strong>
-                    You have joined {{ course["code"] }}.
-                </strong>
-
-                <p>
-                    Section:
-                    <strong>
-                        G{{ request.form.get("section", "") }}
-                    </strong>
-                </p>
+                <strong>You have joined {{ course["code"] }}.</strong>
 
                 <p>
                     Your GitHub username is now linked to your
@@ -944,25 +842,6 @@ def join_course(join_code):
                     value="{{ request.form.get('student_id', '') }}"
                     required
                 >
-
-                <label for="section">
-                    Section
-                </label>
-
-                <input
-                    id="section"
-                    name="section"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value="{{ request.form.get('section', '') }}"
-                    placeholder="e.g. 1 for G1, 2 for G2"
-                    required
-                >
-
-                <div class="hint">
-                    Enter 1 for G1, 2 for G2, etc.
-                </div>
 
                 <label for="email">
                     Email address
@@ -1022,7 +901,6 @@ def join_course(join_code):
         success=success,
     )
 
-
 @app.get("/")
 def home():
     submissions = get_latest_submissions()
@@ -1036,13 +914,9 @@ def home():
         status_text = "Passed" if passed else "Failed"
         status_class = "passed" if passed else "failed"
 
-        repository_owner = (
-            submission["repository"].split("/")[0]
-        )
-
         student = (
             submission["student_name"]
-            or repository_owner
+            or submission["repository"].split("/")[0]
         )
 
         display_time = format_submission_time(
@@ -1058,39 +932,30 @@ def home():
 
         if score_ratio == 1:
             score_class = "score-full"
+            score_icon = "●"
         elif score_ratio > 0:
             score_class = "score-partial"
+            score_icon = "●"
         else:
             score_class = "score-zero"
-
-        course_code = (
-            submission["course_code"] or "-"
-        )
-
-        section_display = format_section(
-            submission["section"]
-        )
+            score_icon = "●"
 
         rows.append(
             f"""
             <tr>
                 <td>
-                    <strong>{escape(str(student))}</strong>
+                    <strong>{student}</strong>
 
                     <div class="student-github">
-                        @{escape(repository_owner)}
+                        @{submission["repository"].split("/")[0]}
                     </div>
                 </td>
 
-                <td>{escape(str(course_code))}</td>
-
-                <td>{escape(section_display)}</td>
-
-                <td>{escape(str(submission["assignment"]))}</td>
+                <td>{submission["assignment"]}</td>
 
                 <td>
                     <span class="score-badge {score_class}">
-                        ●
+                        {score_icon}
                         {submission["score"]}/{submission["max_score"]}
                     </span>
                 </td>
@@ -1102,20 +967,26 @@ def home():
                 </td>
 
                 <td>
-                    <code>{escape(submission["commit_sha"][:7])}</code>
+                    <code>{submission["commit_sha"][:7]}</code>
                 </td>
 
-                <td>{escape(display_time)}</td>
+                <td>{display_time}</td>
             </tr>
             """
         )
+    print(
+        "DEBUG:",
+        submission["repository"],
+        submission["student_name"],
+    )
+
 
     if rows:
         table_body = "\n".join(rows)
     else:
         table_body = """
         <tr>
-            <td colspan="8" class="empty">
+            <td colspan="6" class="empty">
                 No submissions have been recorded yet.
             </td>
         </tr>
@@ -1148,7 +1019,7 @@ def home():
         }}
 
         .container {{
-            max-width: 1350px;
+            max-width: 1200px;
             margin: auto;
         }}
 
@@ -1189,7 +1060,6 @@ def home():
             padding: 15px 18px;
             text-align: left;
             border-bottom: 1px solid #e5e7eb;
-            white-space: nowrap;
         }}
 
         th {{
@@ -1218,7 +1088,6 @@ def home():
             background: #fee2e2;
             color: #991b1b;
         }}
-
         .score-badge {{
             display: inline-flex;
             align-items: center;
@@ -1242,7 +1111,6 @@ def home():
             background: #fee2e2;
             color: #991b1b;
         }}
-
         .empty {{
             text-align: center;
             color: #6b7280;
@@ -1255,16 +1123,24 @@ def home():
             border-radius: 5px;
         }}
 
+        @media (max-width: 850px) {{
+            .card {{
+                overflow-x: auto;
+            }}
+
+            table {{
+                min-width: 900px;
+            }}
+        }}
         .search-row {{
             display: flex;
             align-items: center;
             gap: 15px;
             margin-top: 14px;
-            flex-wrap: wrap;
         }}
 
         .search-row input {{
-            width: 480px;
+            width: 420px;
             max-width: 100%;
             padding: 10px 12px;
             border: 1px solid #d1d5db;
@@ -1281,16 +1157,6 @@ def home():
         #resultCount {{
             color: #6b7280;
             font-size: 0.9rem;
-        }}
-
-        @media (max-width: 900px) {{
-            .card {{
-                overflow-x: auto;
-            }}
-
-            table {{
-                min-width: 1050px;
-            }}
         }}
     </style>
 </head>
@@ -1311,7 +1177,7 @@ def home():
                     <input
                         type="text"
                         id="submissionSearch"
-                        placeholder="Search name, GitHub username, course, section, assignment..."
+                        placeholder="Search student, GitHub username, assignment..."
                         oninput="filterSubmissions()"
                     >
 
@@ -1323,8 +1189,6 @@ def home():
                 <thead>
                     <tr>
                         <th>Student</th>
-                        <th>Course</th>
-                        <th>Section</th>
                         <th>Assignment</th>
                         <th>Score</th>
                         <th>Status</th>
@@ -1339,7 +1203,6 @@ def home():
             </table>
         </div>
     </div>
-
     <script>
         function filterSubmissions() {{
             const search = document
@@ -1347,10 +1210,6 @@ def home():
                 .value
                 .toLowerCase()
                 .trim();
-
-            const terms = search
-                .split(/\\s+/)
-                .filter(Boolean);
 
             const table = document.getElementById(
                 "submissionsTable"
@@ -1365,9 +1224,7 @@ def home():
             rows.forEach(row => {{
                 const text = row.innerText.toLowerCase();
 
-                const matches = terms.every(
-                    term => text.includes(term)
-                );
+                const matches = text.includes(search);
 
                 row.style.display = matches ? "" : "none";
 
@@ -1384,11 +1241,10 @@ def home():
         }}
 
         filterSubmissions();
-    </script>
+        </script>
 </body>
 </html>
 """
-
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -1574,7 +1430,6 @@ def admin():
             font-weight: bold;
             cursor: pointer;
         }
-
         .delete-button {
             background: #dc2626;
         }
@@ -1582,7 +1437,6 @@ def admin():
         .delete-button:hover {
             background: #b91c1c;
         }
-
         table {
             width: 100%;
             border-collapse: collapse;
@@ -1608,7 +1462,6 @@ def admin():
             padding: 3px 6px;
             border-radius: 4px;
         }
-
         .export-button {
             display: inline-block;
             padding: 10px 16px;
@@ -1617,7 +1470,6 @@ def admin():
             color: white;
             text-decoration: none;
             font-weight: bold;
-            margin-bottom: 18px;
         }
 
         .export-button:hover {
@@ -1633,7 +1485,7 @@ def admin():
             href="{{ url_for('admin_export_results') }}"
             class="export-button"
         >
-            Export All Results
+            Export IS216 Results
         </a>
 
         <div class="topbar">
@@ -1718,7 +1570,6 @@ def admin():
                                     /join/{{ course["join_code"] }}
                                 </code>
                             </td>
-
                             <td>
                                 <form
                                     method="post"
@@ -1897,7 +1748,6 @@ def admin_delete_course(course_id):
         url_for("admin")
     )
 
-
 @app.get("/admin/export/results.xlsx")
 def admin_export_results():
 
@@ -1906,16 +1756,13 @@ def admin_export_results():
             url_for("admin")
         )
 
-    rows = get_export_rows()
+    rows = get_is216_export_rows()
 
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.title = "All Results"
+    worksheet.title = "IS216 Results"
 
     headers = [
-        "Course",
-        "Course Offering",
-        "Section",
         "Student ID",
         "Name",
         "Email",
@@ -1941,9 +1788,6 @@ def admin_export_results():
 
     for row in rows:
         worksheet.append([
-            row["course"],
-            row["course_offering"],
-            row["section"],
             row["student_id"],
             row["name"],
             row["email"],
@@ -1960,19 +1804,16 @@ def admin_export_results():
     worksheet.auto_filter.ref = worksheet.dimensions
 
     column_widths = {
-        "A": 12,
-        "B": 22,
-        "C": 10,
-        "D": 15,
-        "E": 24,
-        "F": 30,
-        "G": 22,
-        "H": 18,
-        "I": 10,
-        "J": 12,
-        "K": 16,
-        "L": 24,
-        "M": 42,
+        "A": 15,
+        "B": 24,
+        "C": 30,
+        "D": 22,
+        "E": 16,
+        "F": 10,
+        "G": 12,
+        "H": 16,
+        "I": 24,
+        "J": 42,
     }
 
     for column, width in column_widths.items():
@@ -1983,7 +1824,7 @@ def admin_export_results():
     output.seek(0)
 
     filename = (
-        "autograde_results_"
+        "IS216_results_"
         + datetime.now(
             ZoneInfo("Asia/Singapore")
         ).strftime("%Y%m%d_%H%M")
@@ -2000,7 +1841,6 @@ def admin_export_results():
         ),
     )
 
-
 @app.get("/admin/logout")
 def admin_logout():
 
@@ -2010,7 +1850,6 @@ def admin_logout():
         url_for("admin")
     )
 
-
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
@@ -2018,6 +1857,20 @@ def health():
 
 @app.post("/api/grade")
 def grade():
+    # supplied_key = request.headers.get("X-Autograder-Key", "")
+
+    # if not AUTOGRADER_API_KEY:
+    #     return jsonify({
+    #         "error": "Server API key is not configured"
+    #     }), 500
+
+    # if not hmac.compare_digest(
+    #     supplied_key,
+    #     AUTOGRADER_API_KEY,
+    # ):
+    #     return jsonify({
+    #         "error": "Unauthorized"
+    #     }), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -2036,9 +1889,6 @@ def grade():
 
     assignment_path = ASSIGNMENTS.get(assignment_key)
 
-    if assignment_path is None:
-        return jsonify({"error": "Unknown assignment"}), 400
-
     course_join_code = ASSIGNMENT_COURSES.get(
         assignment_key
     )
@@ -2049,10 +1899,9 @@ def grade():
         }), 500
 
     with get_database() as connection:
-
         course = connection.execute(
             """
-            SELECT id, code, title, join_code
+            SELECT id
             FROM courses
             WHERE join_code = ?
             """,
@@ -2065,6 +1914,9 @@ def grade():
         }), 500
 
     course_id = course["id"]
+
+    if assignment_path is None:
+        return jsonify({"error": "Unknown assignment"}), 400
 
     if "/" not in repository_name:
         return jsonify({
@@ -2086,7 +1938,10 @@ def grade():
             "error": "Unknown assignment repository"
         }), 400
 
-    if repository_short_name != expected_repository_name:
+    if (
+        repository_short_name
+        != expected_repository_name
+    ):
         return jsonify({
             "error": (
                 "Repository name does not match "
@@ -2101,8 +1956,7 @@ def grade():
             SELECT
                 users.id,
                 users.name,
-                users.github_username,
-                enrolments.section
+                users.github_username
             FROM users
 
             INNER JOIN enrolments
@@ -2124,16 +1978,7 @@ def grade():
             return jsonify({
                 "error": (
                     "GitHub account is not enrolled "
-                    f"in {course['code']} AutoGrade"
-                )
-            }), 403
-
-        if not student["section"]:
-            return jsonify({
-                "error": (
-                    "Your course enrolment does not have a "
-                    "section. Please re-enrol using the course "
-                    "join page and enter your section."
+                    "in IS216 AutoGrade"
                 )
             }), 403
 

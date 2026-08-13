@@ -1,0 +1,49 @@
+title: CS201 Lab 2 - Swapping Elements
+
+engine: java
+
+student_files:
+  - SinglyLinkedList.java
+
+test_file: HiddenTest.java
+test_class: HiddenTest
+
+compile_timeout: 10
+run_timeout: 5
+
+testcases:
+
+  - id: odd_basic
+    name: Odd-sized list
+    points: 10
+    timeout: 2
+
+  - id: even_basic
+    name: Even-sized list
+    points: 10
+    timeout: 2
+
+  - id: double_values
+    name: Double values
+    points: 10
+    timeout: 2
+
+  - id: ascending_large
+    name: 50,000 ascending
+    points: 10
+    timeout: 2
+
+  - id: descending_large
+    name: 50,000 descending
+    points: 10
+    timeout: 2
+
+  - id: random_large_1
+    name: 50,000 random case 1
+    points: 10
+    timeout: 2
+
+  - id: random_large_2
+    name: 50,000 random case 2
+    points: 10
+    timeout: 2
