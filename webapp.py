@@ -55,9 +55,6 @@ ASSIGNMENTS = {
     "cs201lab1q3": (
         PROJECT_ROOT / "examples" / "cs201lab1q3"
     ),
-    "cs201lab2": (
-        PROJECT_ROOT / "examples" / "cs201lab2"
-    ),
 }
 
 ASSIGNMENT_COURSES = {
@@ -68,7 +65,6 @@ ASSIGNMENT_COURSES = {
     "cs201lab1q1": "CS201-AY2627-T1",
     "cs201lab1q2": "CS201-AY2627-T1",
     "cs201lab1q3": "CS201-AY2627-T1",
-    "cs201lab2": "CS201-AY2627-T1",
 }
 
 ASSIGNMENT_REPOSITORY_NAMES = {
@@ -79,7 +75,6 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "cs201lab1q1": "cs201lab1q1-student-template",
     "cs201lab1q2": "cs201lab1q2-student-template",
     "cs201lab1q3": "cs201lab1q3-student-template",
-    "cs201lab2": "cs201lab2-student-template",
 }
 
 
