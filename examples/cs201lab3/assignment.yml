@@ -1,0 +1,54 @@
+title: CS201 Lab 3 - BST Traversal Verification
+
+engine: java
+
+student_files:
+  - Q1Test.java
+
+test_file: HiddenTest.java
+test_class: HiddenTest
+
+compile_timeout: 30
+run_timeout: 5
+
+testcases:
+
+  - id: invalid_different_nodes
+    name: Invalid - different node sets
+    points: 10
+    timeout: 5
+
+  - id: inorder_pre_post
+    name: Inorder, Preorder, Postorder
+    points: 10
+    timeout: 5
+
+  - id: invalid_combination
+    name: Invalid - inconsistent traversals
+    points: 10
+    timeout: 5
+
+  - id: pre_post_in
+    name: Preorder, Postorder, Inorder
+    points: 10
+    timeout: 5
+
+  - id: larger_valid
+    name: Larger valid BST
+    points: 10
+    timeout: 5
+
+  - id: hidden_balanced
+    name: Hidden balanced BST
+    points: 10
+    timeout: 5
+
+  - id: hidden_permuted
+    name: Hidden traversal ordering
+    points: 10
+    timeout: 5
+
+  - id: hidden_invalid
+    name: Hidden invalid traversal
+    points: 10
+    timeout: 5
