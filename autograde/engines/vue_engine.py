@@ -274,8 +274,7 @@ class VueEngine:
                     (
                         "./node_modules/.bin/vitest run "
                         f"{hidden_test.name} "
-                        "--reporter=json "
-                        f"--outputFile={self.VITEST_RESULT_FILE}"
+                        "--reporter=json"
                     ),
                 ]
 
@@ -299,8 +298,8 @@ class VueEngine:
                         f"{elapsed:.3f}s"
                     )
 
-                    parsed = self._read_vitest_results(
-                        result_path
+                    parsed = self._read_vitest_results_text(
+                        vitest_result.stdout
                     )
 
                     for test in component_tests:
@@ -324,27 +323,17 @@ class VueEngine:
                             f"{test['name']}"
                         )
 
-                    # If Vitest failed before it could produce a
-                    # report, print its diagnostics.
-                    if (
-                        not result_path.exists()
-                        and vitest_result.returncode != 0
-                    ):
+                    if not parsed:
                         print()
                         print(
-                            "=== Vitest did not produce "
-                            "a result file ==="
+                            "=== Could not parse Vitest JSON results ==="
                         )
 
                         if vitest_result.stdout:
-                            print(
-                                vitest_result.stdout
-                            )
+                            print(vitest_result.stdout)
 
                         if vitest_result.stderr:
-                            print(
-                                vitest_result.stderr
-                            )
+                            print(vitest_result.stderr)
 
                 except subprocess.TimeoutExpired:
                     print(
@@ -392,34 +381,29 @@ class VueEngine:
                 ignore_errors=True,
             )
 
-    def _read_vitest_results(
+    def _read_vitest_results_text(
         self,
-        result_path,
+        output,
     ):
         """
-        Vitest's JSON reporter is Jest-compatible enough for our use.
-        Extract each assertion's leaf title and status.
+        Parse Vitest JSON directly from stdout.
 
-        Returns:
-            {
-                "ex1_message": True,
-                "ex1_fruits": True,
-                ...
-            }
+        This avoids relying on an output file crossing a Docker Desktop
+        bind mount before the host tries to read it.
         """
-        if not result_path.exists():
+        if not output:
+            return {}
+
+        json_start = output.find("{")
+
+        if json_start < 0:
             return {}
 
         try:
             data = json.loads(
-                result_path.read_text(
-                    encoding="utf-8"
-                )
+                output[json_start:]
             )
-        except (
-            OSError,
-            json.JSONDecodeError,
-        ):
+        except json.JSONDecodeError:
             return {}
 
         results = {}
@@ -439,8 +423,6 @@ class VueEngine:
                 )
 
                 if not title:
-                    # Some reporter versions expose the leaf
-                    # name under ancestorTitles + fullName only.
                     full_name = assertion.get(
                         "fullName",
                         "",
@@ -538,9 +520,9 @@ class VueEngine:
             "run",
             "--rm",
             "--memory",
-            "1g",
+            "2g",
             "--cpus",
-            "1",
+            "2",
             "--pids-limit",
             "256",
             "-v",

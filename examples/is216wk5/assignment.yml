@@ -1,0 +1,70 @@
+title: IS216 Week 5 - Vue Events, Expressions, Computed & Lists
+engine: vue
+
+required_files:
+  - package.json
+  - pnpm-lock.yaml
+  - src/components/Ex1.vue
+  - src/components/Ex2.vue
+  - src/components/Ex3.vue
+  - src/components/Ex4.vue
+
+test_file: HiddenTest.spec.js
+
+install_timeout: 600
+build_timeout: 90
+test_suite_timeout: 120
+
+testcases:
+  - id: build
+    name: Vue application builds
+    points: 10
+    timeout: 90
+
+  - id: ex1_initial
+    name: Ex1 - initial circle
+    points: 5
+
+  - id: ex1_over
+    name: Ex1 - mouseover changes circle to square
+    points: 10
+
+  - id: ex1_out
+    name: Ex1 - mouseout restores circle
+    points: 5
+
+  - id: ex2_buttons
+    name: Ex2 - scoreboard buttons update scores
+    points: 10
+
+  - id: ex2_expressions
+    name: Ex2 - total and points-left expressions
+    points: 10
+
+  - id: ex2_status_reset
+    name: Ex2 - winner/status and reset behaviour
+    points: 10
+
+  - id: ex3_add_subtract
+    name: Ex3 - addition and subtraction
+    points: 10
+
+  - id: ex3_other_ops
+    name: Ex3 - multiplication, division and modulo
+    points: 10
+
+  - id: ex4_initial
+    name: Ex4 - initial shopping cart
+    points: 5
+
+  - id: ex4_add_button
+    name: Ex4 - add item by button
+    points: 5
+
+  - id: ex4_add_enter
+    name: Ex4 - add item with Enter
+    points: 5
+
+  - id: ex4_delete
+    name: Ex4 - delete item
+    points: 5
