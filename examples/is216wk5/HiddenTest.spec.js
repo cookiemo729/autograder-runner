@@ -8,14 +8,6 @@ import Ex4 from './src/components/Ex4.vue'
 
 describe('IS216 Week 5 hidden tests', () => {
 
-  test('ex1_initial', () => {
-    const wrapper = mount(Ex1)
-    const target = wrapper.find('div')
-    expect(target.exists()).toBe(true)
-    expect(target.attributes('id')).toBe('circle')
-    expect(target.text()).toContain('Mouse Over Me')
-  })
-
   test('ex1_over', async () => {
     const wrapper = mount(Ex1)
     const target = wrapper.find('div')

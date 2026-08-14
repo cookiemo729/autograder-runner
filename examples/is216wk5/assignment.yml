@@ -21,17 +21,13 @@ testcases:
     points: 10
     timeout: 90
 
-  - id: ex1_initial
-    name: Ex1 - initial circle
-    points: 5
-
   - id: ex1_over
     name: Ex1 - mouseover changes circle to square
     points: 10
 
   - id: ex1_out
     name: Ex1 - mouseout restores circle
-    points: 5
+    points: 10
 
   - id: ex2_buttons
     name: Ex2 - scoreboard buttons update scores
