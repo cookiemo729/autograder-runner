@@ -5,3 +5,5 @@ venv/
 grade.json
 .pytest_cache/
 .vscode/
+submissions/
+*.zip

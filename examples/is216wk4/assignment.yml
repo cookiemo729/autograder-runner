@@ -1,0 +1,64 @@
+title: IS216 Week 4 - Vue Basics
+engine: vue
+
+required_files:
+  - package.json
+  - pnpm-lock.yaml
+  - src/components/Ex1.vue
+  - src/components/Ex2.vue
+  - src/components/Ex3.vue
+  - src/components/Ex4.vue
+
+test_file: HiddenTest.spec.js
+
+# Dependency installation may be slow the first time, especially on
+# Docker Desktop. Persistent pnpm caches make subsequent runs faster.
+install_timeout: 600
+
+# Build is run once.
+build_timeout: 90
+
+# All hidden Vitest cases run in ONE process under this overall limit.
+test_suite_timeout: 120
+
+testcases:
+  - id: build
+    name: Vue application builds
+    points: 10
+    timeout: 90
+
+  - id: ex1_message
+    name: Ex1 - instruction displayed
+    points: 10
+
+  - id: ex1_fruits
+    name: Ex1 - three fruit choices rendered
+    points: 10
+
+  - id: ex2_first_image
+    name: Ex2 - image attributes bound correctly
+    points: 10
+
+  - id: ex2_second_image
+    name: Ex2 - second image attributes rendered
+    points: 10
+
+  - id: ex3_username
+    name: Ex3 - username mode displayed initially
+    points: 10
+
+  - id: ex3_email
+    name: Ex3 - selecting Email updates interface
+    points: 10
+
+  - id: ex4_initial
+    name: Ex4 - initial dynamic styling
+    points: 10
+
+  - id: ex4_color
+    name: Ex4 - Change Color toggles styling
+    points: 10
+
+  - id: ex4_text_color
+    name: Ex4 - Change Text Color toggles styling
+    points: 10

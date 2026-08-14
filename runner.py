@@ -5,46 +5,17 @@ from autograde.parser import load_assignment
 from autograde.engine_factory import EngineFactory
 
 
-def grade_assignment(assignment_path, submission_path):
-    """
-    Load an assignment and grade a submission.
-
-    Returns:
-        GradeResult
-    """
-
-    assignment = load_assignment(
-        f"{assignment_path}/assignment.yml"
-    )
-
-    assignment["_assignment_folder"] = (
-        assignment_folder
-    )
-
-    engine = EngineFactory.create(
-        assignment["engine"]
-    )
-
-    result = engine.grade(
-        assignment,
-        submission_path
-    )
-
-    return assignment, result
-
-
 def grade_assignment(
     assignment_folder,
     submission_folder,
 ):
+    """Load an assignment and grade a submission."""
 
     assignment = load_assignment(
         f"{assignment_folder}/assignment.yml"
     )
 
-    assignment["_assignment_folder"] = (
-        assignment_folder
-    )
+    assignment["_assignment_folder"] = assignment_folder
 
     engine = EngineFactory.create(
         assignment["engine"]
@@ -52,47 +23,40 @@ def grade_assignment(
 
     result = engine.grade(
         assignment,
-        submission_folder
+        submission_folder,
     )
 
     return assignment, result
-    
+
 
 def main():
-
     parser = argparse.ArgumentParser()
-
     parser.add_argument("assignment")
-
     parser.add_argument("submission")
-
     parser.add_argument(
         "--output",
         default="grade.json",
-        help="Output JSON file"
+        help="Output JSON file",
     )
 
     args = parser.parse_args()
 
     assignment, result = grade_assignment(
         args.assignment,
-        args.submission
+        args.submission,
     )
 
     print("===================================")
     print(" AutoGrade Runner")
     print("===================================")
-
     print()
     print(f"Title  : {assignment['title']}")
     print(f"Engine : {assignment['engine']}")
     print()
-
     print("Results")
     print("-------")
 
     for test in result.tests:
-
         if test.passed:
             print(f"✓ {test.name} ({test.points} pts)")
         else:
@@ -110,13 +74,13 @@ def main():
                     {
                         "name": test.name,
                         "passed": test.passed,
-                        "points": test.points
+                        "points": test.points,
                     }
                     for test in result.tests
-                ]
+                ],
             },
             file,
-            indent=4
+            indent=4,
         )
 
     print()

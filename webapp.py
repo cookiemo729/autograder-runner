@@ -45,6 +45,7 @@ ASSIGNMENTS = {
     "wk1ex1": PROJECT_ROOT / "examples" / "wk1ex1",
     "wk1ex3": PROJECT_ROOT / "examples" / "wk1ex3",
     "wk1ex4": PROJECT_ROOT / "examples" / "wk1ex4",
+    "is216wk4": PROJECT_ROOT / "examples" / "is216wk4",
 
     "cs201lab1q1": (
         PROJECT_ROOT / "examples" / "cs201lab1q1"
@@ -67,6 +68,7 @@ ASSIGNMENT_COURSES = {
     "wk1ex1": "IS216-AY2627-T1",
     "wk1ex3": "IS216-AY2627-T1",
     "wk1ex4": "IS216-AY2627-T1",
+    "is216wk4": "IS216-AY2627-T1",
 
     "cs201lab1q1": "CS201-AY2627-T1",
     "cs201lab1q2": "CS201-AY2627-T1",
@@ -79,6 +81,7 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "wk1ex1": "wk1ex1-student-template",
     "wk1ex3": "wk1ex3-student-template",
     "wk1ex4": "wk1ex4-student-template",
+    "is216wk4": "is216-wk4-student-template",
 
     "cs201lab1q1": "cs201lab1q1-student-template",
     "cs201lab1q2": "cs201lab1q2-student-template",
