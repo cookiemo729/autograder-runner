@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import fcntl
 from datetime import datetime, timezone, timedelta
 from html import escape
 from io import BytesIO
@@ -93,6 +94,7 @@ ASSIGNMENT_REPOSITORY_NAMES = {
     "cs201lab3": "cs201lab3-student-template",
 }
 
+GRADING_LOCK_PATH = Path("/tmp/autograde-grading.lock")
 
 def get_database():
     connection = sqlite3.connect(DATABASE_PATH)
@@ -2378,6 +2380,26 @@ def grade():
         f"https://github.com/{repository_name}.git"
     )
 
+    grading_lock = open(GRADING_LOCK_PATH, "w")
+
+    try:
+        fcntl.flock(
+            grading_lock.fileno(),
+            fcntl.LOCK_EX | fcntl.LOCK_NB,
+        )
+    except BlockingIOError:
+        grading_lock.close()
+
+        response = jsonify({
+            "error": "Grader busy",
+            "retry_after": 15,
+        })
+
+        response.status_code = 429
+        response.headers["Retry-After"] = "15"
+
+        return response
+
     work_folder = Path(
         tempfile.mkdtemp(prefix="autograde-")
     )
@@ -2483,6 +2505,13 @@ def grade():
             work_folder,
             ignore_errors=True,
         )
+
+        fcntl.flock(
+            grading_lock.fileno(),
+            fcntl.LOCK_UN,
+        )
+
+        grading_lock.close()
 
 
 if __name__ == "__main__":
