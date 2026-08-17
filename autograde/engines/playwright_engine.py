@@ -1,7 +1,10 @@
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
-
+from playwright.sync_api import (
+    Error as PlaywrightError,
+    TimeoutError as PlaywrightTimeoutError,
+    sync_playwright,
+)
 from autograde.models import GradeResult, TestResult
 
 
@@ -256,11 +259,12 @@ class PlaywrightEngine:
 
                 page = browser.new_page()
 
+                # Student exercises are local HTML files. If an expected
+                # element is missing, fail quickly rather than waiting 30s.
+                page.set_default_timeout(5000)
+
                 messages = []
                 requests = []
-
-
-                # Console messages
 
                 page.on(
                     "console",
@@ -269,18 +273,12 @@ class PlaywrightEngine:
                     )
                 )
 
-
-                # JavaScript errors
-
                 page.on(
                     "pageerror",
                     lambda err: print(
                         f"JavaScript Error: {err}"
                     )
                 )
-
-
-                # Network requests
 
                 page.on(
                     "request",
@@ -289,69 +287,85 @@ class PlaywrightEngine:
                     )
                 )
 
+                passed = False
 
-                print(
-                    f"GET {html}"
-                )
+                try:
 
-                page.goto(html)
-
-
-                context = {
-                    "page": page,
-                    "messages": messages,
-                    "requests": requests,
-                    "inputs": test.get(
-                        "inputs",
-                        {}
+                    print(
+                        f"GET {html}"
                     )
-                }
 
+                    page.goto(
+                        html,
+                        timeout=5000,
+                    )
 
-                # =========================
-                # RUN TEST ACTIONS
-                # =========================
+                    context = {
+                        "page": page,
+                        "messages": messages,
+                        "requests": requests,
+                        "inputs": test.get(
+                            "inputs",
+                            {}
+                        )
+                    }
 
-                for action in test["actions"]:
+                    # =========================
+                    # RUN TEST ACTIONS
+                    # =========================
 
-                    self.run_action(
+                    for action in test["actions"]:
+
+                        self.run_action(
+                            context,
+                            action
+                        )
+
+                    # =========================
+                    # CHECK EXPECTATION
+                    # =========================
+
+                    passed = self.execute_expectation(
                         context,
-                        action
+                        test
                     )
 
+                except PlaywrightTimeoutError as error:
 
-                # =========================
-                # CHECK EXPECTATION
-                # =========================
-
-                passed = self.execute_expectation(
-                    context,
-                    test
-                )
-
-
-                # =========================
-                # SCORE
-                # =========================
-
-                max_score += test["points"]
-
-                if passed:
-                    score += test["points"]
-
-
-                results.append(
-                    TestResult(
-                        name=test["name"],
-                        passed=passed,
-                        points=test["points"]
+                    print(
+                        f"Test failed: Playwright timeout: {error}"
                     )
-                )
 
+                    passed = False
 
-                # Close this testcase's page
+                except PlaywrightError as error:
 
-                page.close()
+                    print(
+                        f"Test failed: Playwright error: {error}"
+                    )
+
+                    passed = False
+
+                finally:
+
+                    # =========================
+                    # SCORE
+                    # =========================
+
+                    max_score += test["points"]
+
+                    if passed:
+                        score += test["points"]
+
+                    results.append(
+                        TestResult(
+                            name=test["name"],
+                            passed=passed,
+                            points=test["points"]
+                        )
+                    )
+
+                    page.close()
 
 
             # =========================
