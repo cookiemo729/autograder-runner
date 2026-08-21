@@ -316,6 +316,23 @@ def get_latest_submissions():
 
         return connection.execute(
             """
+            WITH ranked_submissions AS (
+                SELECT
+                    s.*,
+
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            LOWER(s.repository),
+                            s.assignment
+
+                        ORDER BY
+                            s.submitted_at DESC,
+                            s.id DESC
+                    ) AS row_number
+
+                FROM submissions AS s
+            )
+
             SELECT
                 s.id,
                 s.repository,
@@ -334,10 +351,11 @@ def get_latest_submissions():
                 u.github_username,
 
                 e.section,
+
                 c.code AS course_code,
                 c.join_code AS course_join_code
 
-            FROM submissions AS s
+            FROM ranked_submissions AS s
 
             LEFT JOIN users AS u
                 ON LOWER(u.github_username) =
@@ -356,8 +374,10 @@ def get_latest_submissions():
             LEFT JOIN courses AS c
                 ON c.id = s.course_id
 
-            ORDER BY s.submitted_at DESC
-            LIMIT 100
+            WHERE s.row_number = 1
+
+            ORDER BY
+                s.submitted_at DESC
             """
         ).fetchall()
 
@@ -2225,7 +2245,7 @@ def admin_export_results():
         "autograde_results_"
         + datetime.now(
             ZoneInfo("Asia/Singapore")
-        ).strftime("%Y%m%d_%H%M")
+        ).strftime("%Y%m%d_%H%M%S")
         + ".xlsx"
     )
 
