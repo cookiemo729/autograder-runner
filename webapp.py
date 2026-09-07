@@ -11,6 +11,7 @@ from html import escape
 from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from contextlib import contextmanager
 
 from flask import (
     Flask,
@@ -96,10 +97,19 @@ ASSIGNMENT_REPOSITORY_NAMES = {
 
 GRADING_LOCK_PATH = Path("/tmp/autograde-grading.lock")
 
+@contextmanager
 def get_database():
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
-    return connection
+
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def initialize_database():
