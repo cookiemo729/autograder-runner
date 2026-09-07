@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 from autograde.models import GradeResult, TestResult
@@ -13,9 +14,7 @@ class JavaEngine:
 
     def grade(self, assignment, submission_folder):
 
-        submission_folder = Path(
-            submission_folder
-        )
+        submission_folder = Path(submission_folder)
 
         tests = assignment.get(
             "testcases",
@@ -23,7 +22,6 @@ class JavaEngine:
         )
 
         results = []
-
         score = 0
 
         max_score = sum(
@@ -74,7 +72,6 @@ class JavaEngine:
                     work_folder / filename,
                 )
 
-
             # =========================
             # COPY HIDDEN TEST
             # =========================
@@ -96,7 +93,6 @@ class JavaEngine:
                 / hidden_test.name,
             )
 
-
             # =========================
             # JAVA FILES
             # =========================
@@ -107,14 +103,20 @@ class JavaEngine:
                 in work_folder.glob("*.java")
             ]
 
-
             # =========================
             # COMPILE INSIDE DOCKER
             # =========================
 
+            compile_container = (
+                self._new_container_name(
+                    "compile"
+                )
+            )
+
             compile_command = (
                 self._docker_command(
-                    work_folder
+                    work_folder,
+                    compile_container,
                 )
                 + [
                     "javac",
@@ -124,16 +126,14 @@ class JavaEngine:
 
             try:
 
-                compile_result = (
-                    subprocess.run(
-                        compile_command,
-                        capture_output=True,
-                        text=True,
-                        timeout=assignment.get(
-                            "compile_timeout",
-                            10,
-                        ),
-                    )
+                compile_result = subprocess.run(
+                    compile_command,
+                    capture_output=True,
+                    text=True,
+                    timeout=assignment.get(
+                        "compile_timeout",
+                        10,
+                    ),
                 )
 
             except subprocess.TimeoutExpired:
@@ -155,11 +155,13 @@ class JavaEngine:
                     ],
                 )
 
+            finally:
 
-            if (
-                compile_result.returncode
-                != 0
-            ):
+                self._remove_container(
+                    compile_container
+                )
+
+            if compile_result.returncode != 0:
 
                 print(
                     "=== Java compilation "
@@ -186,7 +188,6 @@ class JavaEngine:
                     ],
                 )
 
-
             # =========================
             # RUN TESTS
             # =========================
@@ -201,9 +202,16 @@ class JavaEngine:
                     ),
                 )
 
+                container_name = (
+                    self._new_container_name(
+                        "test"
+                    )
+                )
+
                 run_command = (
                     self._docker_command(
-                        work_folder
+                        work_folder,
+                        container_name,
                     )
                     + [
                         "java",
@@ -218,15 +226,15 @@ class JavaEngine:
                     time.perf_counter()
                 )
 
+                passed = False
+
                 try:
 
-                    run_result = (
-                        subprocess.run(
-                            run_command,
-                            capture_output=True,
-                            text=True,
-                            timeout=timeout,
-                        )
+                    run_result = subprocess.run(
+                        run_command,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
                     )
 
                     elapsed = (
@@ -235,13 +243,11 @@ class JavaEngine:
                     )
 
                     output = (
-                        run_result.stdout
-                        .strip()
+                        run_result.stdout.strip()
                     )
 
                     passed = (
-                        run_result.returncode
-                        == 0
+                        run_result.returncode == 0
                         and output == "PASS"
                     )
 
@@ -250,17 +256,12 @@ class JavaEngine:
                         f"{elapsed:.6f}s"
                     )
 
-                    if (
-                        run_result.stderr
-                    ):
-
+                    if run_result.stderr:
                         print(
                             run_result.stderr
                         )
 
-                except (
-                    subprocess.TimeoutExpired
-                ):
+                except subprocess.TimeoutExpired:
 
                     elapsed = (
                         time.perf_counter()
@@ -271,11 +272,19 @@ class JavaEngine:
 
                     print(
                         f"{test['name']}: "
-                        f"TIME LIMIT "
-                        f"EXCEEDED "
+                        f"TIME LIMIT EXCEEDED "
                         f"({timeout}s)"
                     )
 
+                finally:
+
+                    # Critical:
+                    # guarantee that the Docker
+                    # container and its Java
+                    # process are destroyed.
+                    self._remove_container(
+                        container_name
+                    )
 
                 result = TestResult(
                     name=test["name"],
@@ -283,22 +292,16 @@ class JavaEngine:
                     points=test["points"],
                 )
 
-                results.append(
-                    result
-                )
+                results.append(result)
 
                 if passed:
-                    score += test[
-                        "points"
-                    ]
-
+                    score += test["points"]
 
             return GradeResult(
                 score=score,
                 max_score=max_score,
                 tests=results,
             )
-
 
         finally:
 
@@ -307,16 +310,63 @@ class JavaEngine:
                 ignore_errors=True,
             )
 
+    # =========================
+    # CONTAINER NAME
+    # =========================
+
+    def _new_container_name(
+        self,
+        purpose,
+    ):
+
+        return (
+            "autograde-java-"
+            f"{purpose}-"
+            f"{uuid.uuid4().hex}"
+        )
+
+    # =========================
+    # REMOVE CONTAINER
+    # =========================
+
+    def _remove_container(
+        self,
+        container_name,
+    ):
+
+        subprocess.run(
+            [
+                "docker",
+                "rm",
+                "-f",
+                container_name,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+
+    # =========================
+    # DOCKER COMMAND
+    # =========================
 
     def _docker_command(
         self,
         work_folder,
+        container_name,
     ):
 
         return [
             "docker",
             "run",
             "--rm",
+
+            # Give every grading container
+            # a unique name so that we can
+            # forcibly destroy it on timeout.
+            "--name",
+            container_name,
 
             # No internet access
             "--network",
