@@ -2490,6 +2490,7 @@ def grade():
                     test.points if test.passed else 0
                 ),
                 "feedback": test.feedback,
+                "runtime_ms": test.runtime_ms,
             }
             for test in result.tests
         ]
