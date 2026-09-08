@@ -1116,6 +1116,39 @@ def home():
             submission["section"]
         )
 
+        try:
+            tests = json.loads(
+                submission["tests_json"] or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            tests = []
+
+        runtimes = [
+            float(test["runtime_ms"])
+            for test in tests
+            if test.get("runtime_ms") is not None
+        ]
+
+        if runtimes:
+            runtime_values = " / ".join(
+                f"{runtime:.3f}"
+                for runtime in runtimes
+            )
+
+            performance_html = (
+                f'<div class="runtime-values">'
+                f'{escape(runtime_values)} ms'
+                f'</div>'
+                f'<div class="runtime-count">'
+                f'{len(runtimes)} timed '
+                f'{"test" if len(runtimes) == 1 else "tests"}'
+                f'</div>'
+            )
+        else:
+            performance_html = (
+                '<span class="no-runtime">—</span>'
+            )
+
         rows.append(
             f"""
             <tr>
@@ -1152,7 +1185,9 @@ def home():
                         {status_text}
                     </span>
                 </td>
-
+                <td>
+                    {performance_html}
+                </td>
                 <td>
                     <code>{escape(submission["commit_sha"][:7])}</code>
                 </td>
@@ -1167,7 +1202,7 @@ def home():
     else:
         table_body = """
         <tr>
-            <td colspan="8" class="empty">
+            <td colspan="9" class="empty">
                 No submissions have been recorded yet.
             </td>
         </tr>
@@ -1356,8 +1391,23 @@ def home():
             }}
 
             table {{
-                min-width: 1050px;
+                min-width: 1200px;
             }}
+        }}
+        .runtime-values {{
+            font-weight: bold;
+            font-size: 0.88rem;
+            color: #374151;
+        }}
+
+        .runtime-count {{
+            margin-top: 4px;
+            color: #6b7280;
+            font-size: 0.78rem;
+        }}
+
+        .no-runtime {{
+            color: #9ca3af;
         }}
     </style>
 </head>
@@ -1395,6 +1445,7 @@ def home():
                         <th>Assignment</th>
                         <th>Score</th>
                         <th>Status</th>
+                        <th>Performance</th>
                         <th>Commit</th>
                         <th>Submitted</th>
                     </tr>
