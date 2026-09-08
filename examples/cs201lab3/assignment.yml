@@ -52,3 +52,8 @@ testcases:
     name: Hidden invalid traversal
     points: 10
     timeout: 5
+
+  - id: performance_large
+    name: Performance - 5,000 nodes
+    points: 0
+    timeout: 5

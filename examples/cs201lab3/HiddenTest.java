@@ -50,6 +50,11 @@ public class HiddenTest {
                     testHiddenInvalid();
                 break;
 
+            case "performance_large":
+                passed =
+                    testPerformanceLarge();
+                break;
+
             default:
                 System.exit(2);
                 return;
@@ -214,6 +219,83 @@ public class HiddenTest {
 
         return actual.equals(
             "Invalid traversals"
+        );
+    }
+
+    private static boolean
+    testPerformanceLarge() {
+
+        final int n = 5000;
+
+        StringBuilder inorder =
+            new StringBuilder();
+
+        StringBuilder preorder =
+            new StringBuilder();
+
+        StringBuilder postorder =
+            new StringBuilder();
+
+        /*
+        * Construct a right-skewed BST:
+        *
+        * 1
+        *  \
+        *   2
+        *    \
+        *     3
+        *      ...
+        *
+        * inorder:   1-2-3-...-n
+        * preorder:  1-2-3-...-n
+        * postorder: n-...-3-2-1
+        */
+
+        for (int i = 1; i <= n; i++) {
+
+            if (i > 1) {
+                inorder.append("-");
+                preorder.append("-");
+            }
+
+            inorder.append(i);
+            preorder.append(i);
+        }
+
+        for (int i = n; i >= 1; i--) {
+
+            if (i < n) {
+                postorder.append("-");
+            }
+
+            postorder.append(i);
+        }
+
+        long start =
+            System.nanoTime();
+
+        String actual =
+            Q1Test.verify(
+                inorder.toString(),
+                preorder.toString(),
+                postorder.toString()
+            );
+
+        long end =
+            System.nanoTime();
+
+        double runtimeMs =
+            (end - start) / 1_000_000.0;
+
+        System.err.printf(
+            "performance_large runtime: %.3f ms%n",
+            runtimeMs
+        );
+
+        return actual.equals(
+            "Traversal 1 - Inorder, "
+            + "Traversal 2 - Preorder, "
+            + "Traversal 3 - Postorder"
         );
     }
 }
