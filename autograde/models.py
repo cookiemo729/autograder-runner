@@ -6,6 +6,7 @@ class TestResult:
     name: str
     passed: bool
     points: int
+    feedback: str | None = None
 
 
 @dataclass

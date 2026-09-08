@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 import tempfile
@@ -63,6 +64,13 @@ class JavaEngine:
                                 ),
                                 passed=False,
                                 points=max_score,
+                                feedback=(
+                                    f"Required file '{filename}' "
+                                    "was not found in your submission. "
+                                    "Check that the filename and "
+                                    "capitalisation match the "
+                                    "assignment requirements."
+                                ),
                             )
                         ],
                     )
@@ -151,6 +159,12 @@ class JavaEngine:
                             name="Compilation",
                             passed=False,
                             points=max_score,
+                            feedback=(
+                                "Compilation exceeded the "
+                                "allowed time limit. Check "
+                                "your Java source files and "
+                                "try again."
+                            ),
                         )
                     ],
                 )
@@ -176,6 +190,14 @@ class JavaEngine:
                     compile_result.stderr
                 )
 
+                feedback = (
+                    self._compilation_feedback(
+                        compile_result.stderr,
+                        assignment["student_files"],
+                        hidden_test.name,
+                    )
+                )
+
                 return GradeResult(
                     score=0,
                     max_score=max_score,
@@ -184,6 +206,7 @@ class JavaEngine:
                             name="Compilation",
                             passed=False,
                             points=max_score,
+                            feedback=feedback,
                         )
                     ],
                 )
@@ -309,6 +332,116 @@ class JavaEngine:
                 work_folder,
                 ignore_errors=True,
             )
+
+    # =========================
+    # COMPILATION FEEDBACK
+    # =========================
+
+    def _compilation_feedback(
+        self,
+        stderr,
+        student_files,
+        hidden_test_name,
+    ):
+
+        if not stderr:
+            return (
+                "Your Java submission could not "
+                "be compiled. Check your source "
+                "files for syntax errors and make "
+                "sure all required methods match "
+                "the assignment specification."
+            )
+
+        # If javac reports an error involving the
+        # hidden test, never expose the raw compiler
+        # output because it may reveal private tests.
+        if hidden_test_name in stderr:
+            return (
+                "Your submitted class does not "
+                "match the required assignment "
+                "interface. Check that all required "
+                "methods from the starter code/"
+                "specification are present and that "
+                "their method names, parameters and "
+                "return types have not been changed."
+            )
+
+        # Keep only compiler diagnostics that refer
+        # to files submitted by the student.
+        safe_lines = []
+        include_following = False
+
+        for line in stderr.splitlines():
+
+            starts_student_error = any(
+                re.match(
+                    rf"^(?:.*/)?{re.escape(filename)}:"
+                    r"\d+:\s*error:",
+                    line,
+                )
+                for filename in student_files
+            )
+
+            if starts_student_error:
+                safe_lines.append(line)
+                include_following = True
+                continue
+
+            if include_following:
+
+                # A new javac file diagnostic begins.
+                if re.match(
+                    r"^(?:.*/)?[^:]+\.java:"
+                    r"\d+:\s*(?:error|warning):",
+                    line,
+                ):
+                    include_following = False
+                    continue
+
+                # Do not expose anything mentioning
+                # the private hidden test.
+                if hidden_test_name in line:
+                    include_following = False
+                    continue
+
+                # Keep a small amount of javac context:
+                # source line, caret, symbol/location.
+                if (
+                    line.strip()
+                    and not re.match(
+                        r"^\d+\s+errors?$",
+                        line.strip(),
+                    )
+                ):
+                    safe_lines.append(line)
+
+                # Limit how much compiler output is
+                # returned to the student.
+                if len(safe_lines) >= 8:
+                    break
+
+        if safe_lines:
+
+            diagnostic = "\n".join(
+                safe_lines[:8]
+            )
+
+            return (
+                "Your Java submission could not "
+                "be compiled.\n\n"
+                + diagnostic
+                + "\n\nPlease fix the compilation "
+                "error and resubmit."
+            )
+
+        return (
+            "Your Java submission could not "
+            "be compiled. Check your source files "
+            "for syntax/type errors and make sure "
+            "all required methods match the "
+            "assignment specification."
+        )
 
     # =========================
     # CONTAINER NAME

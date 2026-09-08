@@ -2489,6 +2489,7 @@ def grade():
                 "awarded": (
                     test.points if test.passed else 0
                 ),
+                "feedback": test.feedback,
             }
             for test in result.tests
         ]
