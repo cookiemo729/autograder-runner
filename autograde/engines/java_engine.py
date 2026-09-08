@@ -250,6 +250,7 @@ class JavaEngine:
                 )
 
                 passed = False
+                runtime_ms = None
 
                 try:
 
@@ -272,6 +273,12 @@ class JavaEngine:
                     passed = (
                         run_result.returncode == 0
                         and output == "PASS"
+                    )
+
+                    runtime_ms = (
+                        self._extract_runtime_ms(
+                            run_result.stderr
+                        )
                     )
 
                     print(
@@ -313,6 +320,7 @@ class JavaEngine:
                     name=test["name"],
                     passed=passed,
                     points=test["points"],
+                    runtime_ms=runtime_ms,
                 )
 
                 results.append(result)
@@ -446,6 +454,31 @@ class JavaEngine:
     # =========================
     # CONTAINER NAME
     # =========================
+
+    def _extract_runtime_ms(
+        self,
+        stderr,
+    ):
+        if not stderr:
+            return None
+
+        match = re.search(
+            r"runtime:\s*"
+            r"([0-9]+(?:\.[0-9]+)?)"
+            r"\s*ms",
+            stderr,
+            re.IGNORECASE,
+        )
+
+        if not match:
+            return None
+
+        try:
+            return float(
+                match.group(1)
+            )
+        except ValueError:
+            return None
 
     def _new_container_name(
         self,

@@ -7,6 +7,7 @@ class TestResult:
     passed: bool
     points: int
     feedback: str | None = None
+    runtime_ms: float | None = None
 
 
 @dataclass
