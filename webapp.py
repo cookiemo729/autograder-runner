@@ -12,6 +12,8 @@ from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from contextlib import contextmanager
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from flask import (
     Flask,
@@ -537,6 +539,7 @@ def get_export_rows():
                             score,
                             max_score,
                             passed,
+                            tests_json,
                             submitted_at
                         FROM submissions
                         WHERE course_id = ?
@@ -569,7 +572,37 @@ def get_export_rows():
                     }
 
                     if submission:
+                        try:
+                            tests = json.loads(
+                                submission["tests_json"] or "[]"
+                            )
+                        except (
+                            TypeError,
+                            json.JSONDecodeError,
+                        ):
+                            tests = []
 
+                        runtimes = {}
+
+                        for test in tests:
+                            runtime_ms = test.get(
+                                "runtime_ms"
+                            )
+
+                            if runtime_ms is None:
+                                continue
+
+                            test_name = str(
+                                test.get(
+                                    "name",
+                                    "Performance",
+                                )
+                            )
+
+                            runtimes[test_name] = float(
+                                runtime_ms
+                            )
+                            
                         status = (
                             "Passed"
                             if submission["passed"]
@@ -585,6 +618,7 @@ def get_export_rows():
                                 submission["submitted_at"]
                             ),
                             "commit_sha": submission["commit_sha"],
+                            "runtimes": runtimes,
                         })
 
                     else:
@@ -596,6 +630,7 @@ def get_export_rows():
                             "status": "Not submitted",
                             "submitted_at": "",
                             "commit_sha": "",
+                            "runtimes": {},
                         })
 
         return export_rows
@@ -2229,6 +2264,18 @@ def admin_export_results():
 
     rows = get_export_rows()
 
+    runtime_test_names = []
+
+    for row in rows:
+        for test_name in row.get(
+            "runtimes",
+            {}
+        ):
+            if test_name not in runtime_test_names:
+                runtime_test_names.append(
+                    test_name
+                )
+
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "All Results"
@@ -2249,6 +2296,11 @@ def admin_export_results():
         "Commit SHA",
     ]
 
+    headers.extend(
+        f"{test_name} Runtime (ms)"
+        for test_name in runtime_test_names
+    )
+
     worksheet.append(headers)
 
     header_fill = PatternFill(
@@ -2257,11 +2309,14 @@ def admin_export_results():
     )
 
     for cell in worksheet[1]:
-        cell.font = Font(bold=True)
+        cell.font = Font(
+            bold=True
+        )
         cell.fill = header_fill
 
     for row in rows:
-        worksheet.append([
+
+        excel_row = [
             row["course"],
             row["course_offering"],
             row["section"],
@@ -2275,10 +2330,29 @@ def admin_export_results():
             row["status"],
             row["submitted_at"],
             row["commit_sha"],
-        ])
+        ]
+
+        runtimes = row.get(
+            "runtimes",
+            {}
+        )
+
+        for test_name in runtime_test_names:
+            excel_row.append(
+                runtimes.get(
+                    test_name,
+                    ""
+                )
+            )
+
+        worksheet.append(
+            excel_row
+        )
 
     worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = worksheet.dimensions
+    worksheet.auto_filter.ref = (
+        worksheet.dimensions
+    )
 
     column_widths = {
         "A": 12,
@@ -2296,18 +2370,46 @@ def admin_export_results():
         "M": 42,
     }
 
-    for column, width in column_widths.items():
-        worksheet.column_dimensions[column].width = width
+    for column, width in (
+        column_widths.items()
+    ):
+        worksheet.column_dimensions[
+            column
+        ].width = width
+
+    first_runtime_column = (
+        14
+    )
+
+    for column_number in range(
+        first_runtime_column,
+        len(headers) + 1,
+    ):
+        column_letter = (
+            get_column_letter(
+                column_number
+            )
+        )
+
+        worksheet.column_dimensions[
+            column_letter
+        ].width = 32
 
     output = BytesIO()
-    workbook.save(output)
+
+    workbook.save(
+        output
+    )
+
     output.seek(0)
 
     filename = (
         "autograde_results_"
         + datetime.now(
             ZoneInfo("Asia/Singapore")
-        ).strftime("%Y%m%d_%H%M%S")
+        ).strftime(
+            "%Y%m%d_%H%M%S"
+        )
         + ".xlsx"
     )
 
