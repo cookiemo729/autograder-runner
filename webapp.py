@@ -1130,14 +1130,14 @@ def home():
         ]
 
         if runtimes:
-            runtime_values = " / ".join(
-                f"{runtime:.3f}"
+            runtime_values = "<br>".join(
+                f"{runtime:.3f} ms"
                 for runtime in runtimes
             )
 
             performance_html = (
                 f'<div class="runtime-values">'
-                f'{escape(runtime_values)} ms'
+                f'{runtime_values} ms'
                 f'</div>'
                 f'<div class="runtime-count">'
                 f'{len(runtimes)} timed '
@@ -1235,7 +1235,8 @@ def home():
         }}
 
         .container {{
-            max-width: 1350px;
+            width: 100%;
+            max-width: 1800px;
             margin: auto;
         }}
 
@@ -1385,13 +1386,13 @@ def home():
             font-size: 0.9rem;
         }}
 
-        @media (max-width: 900px) {{
+        @media (max-width: 1100px) {{
             .card {{
                 overflow-x: auto;
             }}
 
             table {{
-                min-width: 1200px;
+                min-width: 1150px;
             }}
         }}
         .runtime-values {{
@@ -1603,7 +1604,7 @@ def admin_submission_detail(submission_id):
         * {{ box-sizing: border-box; }}
         body {{
             margin: 0;
-            padding: 40px 20px;
+            padding: 24px 26px;
             font-family: Arial, sans-serif;
             background: #f4f6f8;
             color: #1f2937;
